@@ -10,7 +10,16 @@ function App() {
   const [showChat, setShowChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
+  const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    name: '',
+    phone: '',
+    area: '',
+    street: '',
+    instructions: ''
+  });
+  const [orderStatus, setOrderStatus] = useState(null);
 
   // Load restaurants when app starts
   useEffect(() => {
@@ -100,12 +109,16 @@ function App() {
       const data = await response.json();
       
       // Add bot response
-      setMessages(prev => [...prev, { role: 'bot', content: data.bot_response }]);
+      setMessages(prev => [...prev, { 
+        role: 'bot', 
+        content: data.bot_response,
+        recommendations: data.recommendations 
+      }]);
       
-      // If recommendations, show them
-      if (data.recommendations && data.recommendations.length > 0) {
-        // You can display recommendations here
-      }
+      // If recommendations, you can also update the main restaurant list if needed
+      // if (data.recommendations && data.recommendations.length > 0) {
+      //   setRestaurants(data.recommendations);
+      // }
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -127,6 +140,46 @@ function App() {
       case 3: return 'Premium';
       case 4: return 'Luxury';
       default: return 'Moderate';
+    }
+  };
+
+  // Place order function
+  const placeOrder = async () => {
+    if (!deliveryAddress.name || !deliveryAddress.phone || !deliveryAddress.area || !deliveryAddress.street) {
+      alert('Please fill in all delivery details');
+      return;
+    }
+
+    const orderData = {
+      userId: 'user_001', // In real app, this would be logged in user
+      restaurantId: cart[0].restaurant_id, // Assuming all items from same restaurant
+      items: cart.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        unit_price: item.price
+      })),
+      deliveryAddress: deliveryAddress,
+      paymentMethod: 'Cash on Delivery'
+    };
+
+    try {
+      const response = await fetch('http://localhost:5000/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setOrderStatus(data.order);
+        setCart([]); // Clear cart
+        setShowCheckout(false);
+        alert(`Order placed successfully! Order ID: ${data.order.order_id}`);
+      }
+    } catch (error) {
+      console.error('Error placing order:', error);
+      alert('Failed to place order. Please try again.');
     }
   };
 
@@ -238,7 +291,7 @@ function App() {
                 <p>Delivery: Rs. {calculateTotal().deliveryFee}</p>
                 <p className="total">Total: Rs. {calculateTotal().total}</p>
               </div>
-              <button className="order-button">
+              <button className="order-button" onClick={() => setShowCheckout(true)}>
                 Place Order
               </button>
             </>
@@ -258,8 +311,26 @@ function App() {
               <p className="chat-welcome">Hi! I can help you find the perfect meal. What are you craving today?</p>
             )}
             {messages.map((msg, index) => (
-              <div key={index} className={`message ${msg.role}`}>
-                {msg.content}
+              <div key={index}>
+                <div className={`message ${msg.role}`}>
+                  {msg.content}
+                </div>
+                {/* Show recommendations if this is a bot message with recommendations */}
+                {msg.role === 'bot' && msg.recommendations && msg.recommendations.length > 0 && (
+                  <div className="chat-recommendations">
+                    {msg.recommendations.map((restaurant, idx) => (
+                      <div key={idx} className="chat-restaurant-card" onClick={() => selectRestaurant(restaurant)}>
+                        <h4>{restaurant.name}</h4>
+                        <p>{restaurant.cuisine.join(', ')}</p>
+                        <div className="restaurant-info-small">
+                          <span>⭐ {restaurant.rating}</span>
+                          <span>{restaurant.price_range}</span>
+                          <span>🚚 {restaurant.delivery_time}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -272,6 +343,112 @@ function App() {
               placeholder="Type your message..."
             />
             <button onClick={sendMessage}>Send</button>
+          </div>
+        </div>
+      )}
+
+      {/* Checkout Modal */}
+      {showCheckout && (
+        <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
+          <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Complete Your Order</h2>
+              <button onClick={() => setShowCheckout(false)} className="close-button">✖</button>
+            </div>
+            
+            <div className="checkout-form">
+              <h3>Delivery Details</h3>
+              
+              <div className="form-group">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  value={deliveryAddress.name}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, name: e.target.value})}
+                  placeholder="Enter your name"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Phone Number</label>
+                <input
+                  type="tel"
+                  value={deliveryAddress.phone}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, phone: e.target.value})}
+                  placeholder="03XX-XXXXXXX"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Area</label>
+                <select
+                  value={deliveryAddress.area}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, area: e.target.value})}
+                >
+                  <option value="">Select Area</option>
+                  <option value="Gulshan-e-Iqbal">Gulshan-e-Iqbal</option>
+                  <option value="DHA">DHA</option>
+                  <option value="Clifton">Clifton</option>
+                  <option value="PECHS">PECHS</option>
+                  <option value="Nazimabad">Nazimabad</option>
+                  <option value="FB Area">FB Area</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Street Address</label>
+                <input
+                  type="text"
+                  value={deliveryAddress.street}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, street: e.target.value})}
+                  placeholder="House #, Street name"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Delivery Instructions (Optional)</label>
+                <textarea
+                  value={deliveryAddress.instructions}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, instructions: e.target.value})}
+                  placeholder="Gate code, landmark, etc."
+                  rows="3"
+                />
+              </div>
+
+              <div className="order-summary">
+                <h3>Order Summary</h3>
+                {cart.map(item => (
+                  <div key={item.id} className="summary-item">
+                    <span>{item.name} x {item.quantity}</span>
+                    <span>Rs. {item.price * item.quantity}</span>
+                  </div>
+                ))}
+                <div className="summary-total">
+                  <span>Subtotal:</span>
+                  <span>Rs. {calculateTotal().subtotal}</span>
+                </div>
+                <div className="summary-total">
+                  <span>Delivery Fee:</span>
+                  <span>Rs. {calculateTotal().deliveryFee}</span>
+                </div>
+                <div className="summary-total final">
+                  <span>Total:</span>
+                  <span>Rs. {calculateTotal().total}</span>
+                </div>
+              </div>
+
+              <div className="payment-method">
+                <h3>Payment Method</h3>
+                <div className="payment-option selected">
+                  <input type="radio" checked readOnly />
+                  <label>Cash on Delivery</label>
+                </div>
+              </div>
+
+              <button className="confirm-order-button" onClick={placeOrder}>
+                Confirm Order - Rs. {calculateTotal().total}
+              </button>
+            </div>
           </div>
         </div>
       )}
