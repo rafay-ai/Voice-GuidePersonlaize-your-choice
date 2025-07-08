@@ -20,10 +20,29 @@ function App() {
     instructions: ''
   });
   const [orderStatus, setOrderStatus] = useState(null);
+  const [showOrderTracking, setShowOrderTracking] = useState(false);
+  const [currentOrderStatus, setCurrentOrderStatus] = useState('confirmed');
+  const [showAuth, setShowAuth] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authForm, setAuthForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: ''
+  });
 
   // Load restaurants when app starts
   useEffect(() => {
     fetchRestaurants();
+  }, []);
+
+  // Check for existing user on app load
+  useEffect(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+    }
   }, []);
 
   // Fetch all restaurants
@@ -104,7 +123,7 @@ function App() {
       const response = await fetch('http://localhost:5000/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: inputMessage, userId: 'user_001' })
+        body: JSON.stringify({ message: inputMessage, userId: currentUser?.id || 'guest' })
       });
       const data = await response.json();
       
@@ -115,10 +134,6 @@ function App() {
         recommendations: data.recommendations 
       }]);
       
-      // If recommendations, you can also update the main restaurant list if needed
-      // if (data.recommendations && data.recommendations.length > 0) {
-      //   setRestaurants(data.recommendations);
-      // }
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -143,16 +158,73 @@ function App() {
     }
   };
 
+  // Handle login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    
+    if (authForm.email && authForm.password) {
+      const user = {
+        id: 'user_001',
+        name: authForm.name || 'Guest User',
+        email: authForm.email,
+        phone: authForm.phone
+      };
+      
+      setCurrentUser(user);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      setShowAuth(false);
+      alert(`Welcome back, ${user.name}!`);
+      
+      setAuthForm({ name: '', email: '', password: '', phone: '' });
+    }
+  };
+
+  // Handle signup
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    
+    if (authForm.name && authForm.email && authForm.password && authForm.phone) {
+      const newUser = {
+        id: `user_${Date.now()}`,
+        name: authForm.name,
+        email: authForm.email,
+        phone: authForm.phone
+      };
+      
+      setCurrentUser(newUser);
+      localStorage.setItem('currentUser', JSON.stringify(newUser));
+      setShowAuth(false);
+      alert(`Welcome to Pakistani Food Delivery, ${newUser.name}!`);
+      
+      setAuthForm({ name: '', email: '', password: '', phone: '' });
+    }
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+    setOrderStatus(null);
+  };
+
   // Place order function
   const placeOrder = async () => {
+    if (!currentUser) {
+      alert('Please login to place an order');
+      setShowCheckout(false);
+      setShowAuth(true);
+      return;
+    }
+
     if (!deliveryAddress.name || !deliveryAddress.phone || !deliveryAddress.area || !deliveryAddress.street) {
       alert('Please fill in all delivery details');
       return;
     }
 
     const orderData = {
-      userId: 'user_001', // In real app, this would be logged in user
-      restaurantId: cart[0].restaurant_id, // Assuming all items from same restaurant
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      restaurantId: cart[0].restaurant_id,
       items: cart.map(item => ({
         name: item.name,
         quantity: item.quantity,
@@ -175,7 +247,13 @@ function App() {
         setOrderStatus(data.order);
         setCart([]); // Clear cart
         setShowCheckout(false);
-        alert(`Order placed successfully! Order ID: ${data.order.order_id}`);
+        setShowOrderTracking(true); // Show tracking instead of alert
+        setCurrentOrderStatus('confirmed');
+        
+        // Simulate order progress
+        setTimeout(() => setCurrentOrderStatus('preparing'), 3000);
+        setTimeout(() => setCurrentOrderStatus('on-the-way'), 10000);
+        setTimeout(() => setCurrentOrderStatus('delivered'), 20000);
       }
     } catch (error) {
       console.error('Error placing order:', error);
@@ -189,6 +267,21 @@ function App() {
       <header className="header">
         <h1>🍕 Pakistani Food Delivery</h1>
         <div className="header-buttons">
+          {currentUser ? (
+            <div className="user-menu">
+              <span className="user-name">👤 {currentUser.name}</span>
+              <button onClick={handleLogout} className="logout-button">Logout</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuth(true)} className="login-button">
+              Login / Signup
+            </button>
+          )}
+          {orderStatus && (
+            <button onClick={() => setShowOrderTracking(true)} className="track-order-button">
+              📍 Track Order
+            </button>
+          )}
           <button onClick={() => setShowChat(!showChat)} className="chat-toggle">
             💬 Chat with Bot
           </button>
@@ -447,6 +540,180 @@ function App() {
 
               <button className="confirm-order-button" onClick={placeOrder}>
                 Confirm Order - Rs. {calculateTotal().total}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Tracking Modal */}
+      {showOrderTracking && orderStatus && (
+        <div className="modal-overlay">
+          <div className="tracking-modal">
+            <div className="tracking-header">
+              <h2>Track Your Order</h2>
+              <button onClick={() => setShowOrderTracking(false)} className="close-button">✖</button>
+            </div>
+            
+            <div className="tracking-content">
+              <div className="order-info">
+                <h3>Order #{orderStatus.order_id}</h3>
+                <p>Estimated delivery: {orderStatus.estimated_delivery}</p>
+              </div>
+
+              <div className="tracking-steps">
+                <div className={`tracking-step ${currentOrderStatus === 'confirmed' ? 'active' : 'completed'}`}>
+                  <div className="step-icon">✅</div>
+                  <div className="step-info">
+                    <h4>Order Confirmed</h4>
+                    <p>Your order has been received</p>
+                  </div>
+                  <div className="step-time">2:30 PM</div>
+                </div>
+
+                <div className={`tracking-step ${currentOrderStatus === 'preparing' ? 'active' : currentOrderStatus === 'confirmed' ? 'pending' : 'completed'}`}>
+                  <div className="step-icon">👨‍🍳</div>
+                  <div className="step-info">
+                    <h4>Preparing</h4>
+                    <p>Restaurant is preparing your food</p>
+                  </div>
+                  <div className="step-time">{currentOrderStatus !== 'confirmed' ? '2:35 PM' : '--:--'}</div>
+                </div>
+
+                <div className={`tracking-step ${currentOrderStatus === 'on-the-way' ? 'active' : ['delivered'].includes(currentOrderStatus) ? 'completed' : 'pending'}`}>
+                  <div className="step-icon">🚴</div>
+                  <div className="step-info">
+                    <h4>On the Way</h4>
+                    <p>Your rider is on the way</p>
+                  </div>
+                  <div className="step-time">{['on-the-way', 'delivered'].includes(currentOrderStatus) ? '2:45 PM' : '--:--'}</div>
+                </div>
+
+                <div className={`tracking-step ${currentOrderStatus === 'delivered' ? 'completed' : 'pending'}`}>
+                  <div className="step-icon">🎉</div>
+                  <div className="step-info">
+                    <h4>Delivered</h4>
+                    <p>Enjoy your meal!</p>
+                  </div>
+                  <div className="step-time">{currentOrderStatus === 'delivered' ? '3:05 PM' : '--:--'}</div>
+                </div>
+              </div>
+
+              {currentOrderStatus === 'on-the-way' && (
+                <div className="rider-info">
+                  <h3>Rider Details</h3>
+                  <div className="rider-card">
+                    <div className="rider-avatar">🏍️</div>
+                    <div className="rider-details">
+                      <h4>Muhammad Ali</h4>
+                      <p>+92 321-1234567</p>
+                      <div className="rider-rating">⭐ 4.8</div>
+                    </div>
+                    <button className="call-rider">📞 Call</button>
+                  </div>
+                </div>
+              )}
+
+              {currentOrderStatus === 'delivered' && (
+                <div className="delivery-complete">
+                  <h3>🎉 Order Delivered Successfully!</h3>
+                  <p>We hope you enjoy your meal!</p>
+                  <button className="rate-order-btn">Rate Your Experience</button>
+                </div>
+              )}
+
+              <div className="order-details">
+                <h3>Order Details</h3>
+                <p><strong>Restaurant:</strong> {orderStatus.items[0]?.restaurant_name || 'Restaurant'}</p>
+                <p><strong>Total:</strong> Rs. {orderStatus.grand_total}</p>
+                <p><strong>Payment:</strong> {orderStatus.payment_method}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      {showAuth && (
+        <div className="modal-overlay" onClick={() => setShowAuth(false)}>
+          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="auth-header">
+              <h2>{isLogin ? 'Welcome Back!' : 'Create Account'}</h2>
+              <button onClick={() => setShowAuth(false)} className="close-button">✖</button>
+            </div>
+            
+            <form onSubmit={isLogin ? handleLogin : handleSignup} className="auth-form">
+              {!isLogin && (
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input
+                    type="text"
+                    value={authForm.name}
+                    onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                    placeholder="Enter your name"
+                    required={!isLogin}
+                  />
+                </div>
+              )}
+              
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={authForm.email}
+                  onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={authForm.password}
+                  onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              
+              {!isLogin && (
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <input
+                    type="tel"
+                    value={authForm.phone}
+                    onChange={(e) => setAuthForm({...authForm, phone: e.target.value})}
+                    placeholder="03XX-XXXXXXX"
+                    required={!isLogin}
+                  />
+                </div>
+              )}
+              
+              <button type="submit" className="auth-submit-button">
+                {isLogin ? 'Login' : 'Sign Up'}
+              </button>
+              
+              <div className="auth-switch">
+                {isLogin ? (
+                  <p>Don't have an account? <span onClick={() => setIsLogin(false)}>Sign up</span></p>
+                ) : (
+                  <p>Already have an account? <span onClick={() => setIsLogin(true)}>Login</span></p>
+                )}
+              </div>
+            </form>
+            
+            <div className="auth-divider">OR</div>
+            
+            <div className="social-auth">
+              <button className="social-button google">
+                <img src="https://www.google.com/favicon.ico" alt="Google" />
+                Continue with Google
+              </button>
+              <button className="social-button facebook">
+                <img src="https://www.facebook.com/favicon.ico" alt="Facebook" />
+                Continue with Facebook
               </button>
             </div>
           </div>

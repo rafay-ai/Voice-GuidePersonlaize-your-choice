@@ -51,6 +51,34 @@ body {
   background-color: #2980b9;
 }
 
+.track-order-button {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s;
+  animation: pulse-button 2s infinite;
+}
+
+.track-order-button:hover {
+  background-color: #229954;
+}
+
+@keyframes pulse-button {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .cart-info {
   background-color: #e74c3c;
   padding: 0.5rem 1rem;
@@ -595,4 +623,409 @@ body {
 
 .confirm-order-button:hover {
   background-color: #229954;
+}
+
+/* Order Tracking Modal */
+.tracking-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tracking-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #ecf0f1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #3498db;
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.tracking-header h2 {
+  margin: 0;
+}
+
+.tracking-content {
+  padding: 1.5rem;
+}
+
+.order-info {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.order-info h3 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.order-info p {
+  color: #7f8c8d;
+}
+
+/* Tracking Steps */
+.tracking-steps {
+  position: relative;
+  margin: 2rem 0;
+}
+
+.tracking-steps::before {
+  content: '';
+  position: absolute;
+  left: 40px;
+  top: 50px;
+  bottom: 50px;
+  width: 2px;
+  background-color: #ecf0f1;
+}
+
+.tracking-step {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+  position: relative;
+  padding: 1rem;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.tracking-step.active {
+  background-color: #ebf5fb;
+  transform: translateX(5px);
+}
+
+.tracking-step.completed .step-icon {
+  background-color: #27ae60;
+  color: white;
+}
+
+.tracking-step.active .step-icon {
+  background-color: #3498db;
+  color: white;
+  animation: pulse 2s infinite;
+}
+
+.tracking-step.pending .step-icon {
+  background-color: #ecf0f1;
+  color: #95a5a6;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(52, 152, 219, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 152, 219, 0);
+  }
+}
+
+.step-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-right: 1rem;
+  z-index: 1;
+  background-color: white;
+  position: relative;
+}
+
+.step-info {
+  flex: 1;
+}
+
+.step-info h4 {
+  margin: 0 0 0.3rem 0;
+  color: #2c3e50;
+}
+
+.step-info p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.step-time {
+  color: #95a5a6;
+  font-size: 0.9rem;
+}
+
+/* Rider Info */
+.rider-info {
+  background-color: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.rider-info h3 {
+  margin-bottom: 1rem;
+  color: #2c3e50;
+}
+
+.rider-card {
+  display: flex;
+  align-items: center;
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rider-avatar {
+  font-size: 2.5rem;
+  margin-right: 1rem;
+}
+
+.rider-details {
+  flex: 1;
+}
+
+.rider-details h4 {
+  margin: 0 0 0.3rem 0;
+  color: #2c3e50;
+}
+
+.rider-details p {
+  margin: 0 0 0.3rem 0;
+  color: #7f8c8d;
+}
+
+.rider-rating {
+  color: #f39c12;
+  font-size: 0.9rem;
+}
+
+.call-rider {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.3s;
+}
+
+.call-rider:hover {
+  background-color: #229954;
+}
+
+/* Delivery Complete */
+.delivery-complete {
+  text-align: center;
+  padding: 2rem;
+  background-color: #d5f4e6;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.delivery-complete h3 {
+  color: #27ae60;
+  margin-bottom: 0.5rem;
+}
+
+.rate-order-btn {
+  background-color: #f39c12;
+  color: white;
+  border: none;
+  padding: 0.7rem 2rem;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-top: 1rem;
+  transition: background-color 0.3s;
+}
+
+.rate-order-btn:hover {
+  background-color: #e67e22;
+}
+
+.order-details {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.order-details h3 {
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.order-details p {
+  margin: 0.3rem 0;
+  color: #555;
+}
+
+/* Authentication Styles */
+.login-button, .logout-button {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s;
+}
+
+.login-button:hover, .logout-button:hover {
+  background-color: #c0392b;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-name {
+  color: white;
+  font-weight: 500;
+}
+
+/* Auth Modal */
+.auth-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.auth-header {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+  position: relative;
+}
+
+.auth-header h2 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.auth-header .close-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.auth-header .close-button:hover {
+  opacity: 1;
+}
+
+.auth-form {
+  padding: 2rem;
+}
+
+.auth-submit-button {
+  width: 100%;
+  padding: 1rem;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-top: 1rem;
+}
+
+.auth-submit-button:hover {
+  background-color: #2980b9;
+}
+
+.auth-switch {
+  text-align: center;
+  margin-top: 1rem;
+  color: #7f8c8d;
+}
+
+.auth-switch span {
+  color: #3498db;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.auth-switch span:hover {
+  text-decoration: underline;
+}
+
+.auth-divider {
+  text-align: center;
+  margin: 1rem 2rem;
+  color: #95a5a6;
+  position: relative;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background-color: #ecf0f1;
+}
+
+.auth-divider::before {
+  left: 0;
+}
+
+.auth-divider::after {
+  right: 0;
+}
+
+.social-auth {
+  padding: 0 2rem 2rem;
+}
+
+.social-button {
+  width: 100%;
+  padding: 0.8rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s;
+}
+
+.social-button:hover {
+  background-color: #f8f9fa;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.social-button img {
+  width: 20px;
+  height: 20px;
 }
