@@ -4,11 +4,10 @@ const cors = require('cors');
 const connectDB = require('./config/database');
 
 // Import models
-const User = require('./models/User.js');
-const Restaurant = require('./models/Restaurant.js');
-const MenuItem = require('./models/MenuItem.js');
-const Order = require('./models/Order.js');
-
+const User = require('./models/User');
+const Restaurant = require('./models/Restaurant');
+const MenuItem = require('./models/MenuItem');
+const Order = require('./models/Order');
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
 
@@ -26,21 +25,10 @@ app.use(express.urlencoded({ extended: true }));
 // Root route - health check
 app.get('/', async (req, res) => {
     try {
-        const restaurantCount = await Restaurant.countDocuments();
-        const menuItemCount = await MenuItem.countDocuments();
-        const userCount = await User.countDocuments();
-        const orderCount = await Order.countDocuments();
-
         res.json({ 
             message: 'Welcome to Pakistani Food Delivery API! 🍕🥘',
             status: 'Server is running',
             database: 'MongoDB Connected',
-            dataLoaded: {
-                restaurants: restaurantCount,
-                menuItems: menuItemCount,
-                users: userCount,
-                orders: orderCount
-            },
             endpoints: {
                 restaurants: '/api/restaurants',
                 menu: '/api/menu/:restaurantId',
@@ -53,7 +41,7 @@ app.get('/', async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Database connection error',
+            message: 'Server error',
             error: error.message
         });
     }
