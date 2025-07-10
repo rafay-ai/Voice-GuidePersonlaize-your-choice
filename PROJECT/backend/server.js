@@ -1,206 +1,336 @@
 require('dotenv').config();
-// backend/server.js
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
-const fs = require('fs');
-const path = require('path');
+const connectDB = require('./config/database');
+
+// Import models
+const User = require('./models/User.js');
+const Restaurant = require('./models/Restaurant.js');
+const MenuItem = require('./models/MenuItem.js');
+const Order = require('./models/Order.js');
+
+// Import services
 const { getChatbotResponse } = require('./services/chatbot');
 
-// Create Express app
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-// Middleware (these are like helpers for your server)
-app.use(cors()); // Allow frontend to talk to backend
-app.use(bodyParser.json()); // Understand JSON data
+// Connect to MongoDB
+connectDB();
+
+// Middleware
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Load your data files with error handling
-const loadData = (filename) => {
+// Root route - health check
+app.get('/', async (req, res) => {
     try {
-        const filePath = path.join(__dirname, 'data', filename);
-        console.log(`Loading ${filename} from ${filePath}`);
-        
-        // Check if file exists
-        if (!fs.existsSync(filePath)) {
-            console.error(`❌ File not found: ${filename}`);
-            return null;
-        }
-        
-        const rawData = fs.readFileSync(filePath, 'utf8');
-        const data = JSON.parse(rawData);
-        console.log(`✅ Successfully loaded ${filename}`);
-        return data;
+        const restaurantCount = await Restaurant.countDocuments();
+        const menuItemCount = await MenuItem.countDocuments();
+        const userCount = await User.countDocuments();
+        const orderCount = await Order.countDocuments();
+
+        res.json({ 
+            message: 'Welcome to Pakistani Food Delivery API! 🍕🥘',
+            status: 'Server is running',
+            database: 'MongoDB Connected',
+            dataLoaded: {
+                restaurants: restaurantCount,
+                menuItems: menuItemCount,
+                users: userCount,
+                orders: orderCount
+            },
+            endpoints: {
+                restaurants: '/api/restaurants',
+                menu: '/api/menu/:restaurantId',
+                recommendations: '/api/recommendations/:userId',
+                order: '/api/order',
+                chat: '/api/chat',
+                auth: '/api/auth'
+            }
+        });
     } catch (error) {
-        console.error(`❌ Error loading ${filename}:`, error.message);
-        return null;
-    }
-};
-
-// Check if data directory exists
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-    console.error('❌ Data directory not found! Creating it...');
-    fs.mkdirSync(dataDir);
-    console.log('📁 Data directory created. Please add your JSON files.');
-}
-
-// Load all your data
-console.log('🔄 Loading data files...');
-let restaurants = loadData('restaurants.json');
-let menuItems = loadData('menu_items.json');
-let userPreferences = loadData('user_preferences.json');
-let orderHistory = loadData('order_history.json');
-let areas = loadData('areas_karachi.json');
-
-// Check if any data failed to load
-if (!restaurants || !menuItems || !userPreferences || !orderHistory || !areas) {
-    console.error('❌ Some data files failed to load. Server will start with limited functionality.');
-    
-    // Provide default empty data structures
-    restaurants = restaurants || { restaurants: [] };
-    menuItems = menuItems || { menu_items: [] };
-    userPreferences = userPreferences || { user_preferences: [] };
-    orderHistory = orderHistory || { orders: [] };
-    areas = areas || { cities: {} };
-}
-
-// Root route - just to check if server is running
-app.get('/', (req, res) => {
-    res.json({ 
-        message: 'Welcome to Pakistani Food Delivery API! 🍕🥘',
-        status: 'Server is running',
-        dataLoaded: {
-            restaurants: restaurants?.restaurants?.length || 0,
-            menuItems: menuItems?.menu_items?.length || 0,
-            users: userPreferences?.user_preferences?.length || 0,
-            orders: orderHistory?.orders?.length || 0,
-            areas: Object.keys(areas?.cities || {}).length || 0
-        },
-        endpoints: {
-            restaurants: '/api/restaurants',
-            menu: '/api/menu/:restaurantId',
-            recommendations: '/api/recommendations/:userId',
-            order: '/api/order',
-            chat: '/api/chat'
-        }
-    });
-});
-
-// Get all restaurants
-app.get('/api/restaurants', (req, res) => {
-    if (!restaurants || !restaurants.restaurants) {
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
-            message: 'Restaurant data not loaded'
+            message: 'Database connection error',
+            error: error.message
         });
     }
-    
-    res.json({
-        success: true,
-        count: restaurants.restaurants.length,
-        data: restaurants.restaurants
-    });
+});
+
+// =============== RESTAURANT ROUTES ===============
+// Get all restaurants
+app.get('/api/restaurants', async (req, res) => {
+    try {
+        const restaurants = await Restaurant.find({ isActive: true }).sort({ featured: -1, rating: -1 });
+        
+        res.json({
+            success: true,
+            count: restaurants.length,
+            data: restaurants
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching restaurants',
+            error: error.message
+        });
+    }
 });
 
 // Get restaurants by cuisine
-app.get('/api/restaurants/cuisine/:cuisine', (req, res) => {
-    if (!restaurants || !restaurants.restaurants) {
-        return res.status(500).json({
+app.get('/api/restaurants/cuisine/:cuisine', async (req, res) => {
+    try {
+        const cuisine = req.params.cuisine;
+        const restaurants = await Restaurant.find({
+            isActive: true,
+            cuisine: { $regex: cuisine, $options: 'i' }
+        }).sort({ rating: -1 });
+        
+        res.json({
+            success: true,
+            cuisine: cuisine,
+            count: restaurants.length,
+            data: restaurants
+        });
+    } catch (error) {
+        res.status(500).json({
             success: false,
-            message: 'Restaurant data not loaded'
+            message: 'Error fetching restaurants by cuisine',
+            error: error.message
         });
     }
-    
-    const cuisine = req.params.cuisine;
-    const filtered = restaurants.restaurants.filter(r => 
-        r.cuisine.some(c => c.toLowerCase().includes(cuisine.toLowerCase()))
-    );
-    res.json({
-        success: true,
-        cuisine: cuisine,
-        count: filtered.length,
-        data: filtered
-    });
 });
 
+// Get single restaurant
+app.get('/api/restaurants/:id', async (req, res) => {
+    try {
+        const restaurant = await Restaurant.findById(req.params.id);
+        
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: restaurant
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching restaurant',
+            error: error.message
+        });
+    }
+});
+
+// =============== MENU ROUTES ===============
 // Get menu for a specific restaurant
-app.get('/api/menu/:restaurantId', (req, res) => {
-    if (!menuItems || !menuItems.menu_items) {
-        return res.status(500).json({
+app.get('/api/menu/:restaurantId', async (req, res) => {
+    try {
+        const restaurantId = req.params.restaurantId;
+        
+        // Check if restaurant exists
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+        
+        const menuItems = await MenuItem.find({ 
+            restaurant: restaurantId,
+            isAvailable: true 
+        }).sort({ category: 1, name: 1 });
+        
+        res.json({
+            success: true,
+            restaurant_id: restaurantId,
+            restaurant_name: restaurant.name,
+            items: menuItems
+        });
+    } catch (error) {
+        res.status(500).json({
             success: false,
-            message: 'Menu data not loaded'
+            message: 'Error fetching menu',
+            error: error.message
         });
     }
-    
-    const restaurantId = parseInt(req.params.restaurantId);
-    const restaurantMenu = menuItems.menu_items.filter(
-        item => item.restaurant_id === restaurantId
-    );
-    
-    if (restaurantMenu.length === 0) {
-        return res.status(404).json({
-            success: false,
-            message: 'No menu found for this restaurant'
-        });
-    }
-    
-    res.json({
-        success: true,
-        restaurant_id: restaurantId,
-        items: restaurantMenu
-    });
 });
 
-// Get user preferences and recommendations
-app.get('/api/recommendations/:userId', (req, res) => {
-    if (!userPreferences || !userPreferences.user_preferences) {
-        return res.status(500).json({
+// =============== USER & RECOMMENDATION ROUTES ===============
+// Get user recommendations
+app.get('/api/recommendations/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        
+        // Find user
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+        
+        // Get user's order history
+        const userOrders = await Order.find({ user: userId })
+            .populate('restaurant')
+            .sort({ createdAt: -1 });
+        
+        // Get recommended restaurants based on user preferences
+        let recommendedRestaurants;
+        if (user.preferences.preferredCuisines.length > 0) {
+            recommendedRestaurants = await Restaurant.find({
+                isActive: true,
+                cuisine: { $in: user.preferences.preferredCuisines }
+            }).limit(5).sort({ rating: -1 });
+        } else {
+            // If no preferences, recommend top-rated restaurants
+            recommendedRestaurants = await Restaurant.find({ isActive: true })
+                .limit(5)
+                .sort({ rating: -1 });
+        }
+        
+        res.json({
+            success: true,
+            user_preferences: user.preferences,
+            order_count: userOrders.length,
+            recommendations: recommendedRestaurants,
+            last_order: userOrders[0] || null
+        });
+    } catch (error) {
+        res.status(500).json({
             success: false,
-            message: 'User data not loaded'
+            message: 'Error fetching recommendations',
+            error: error.message
         });
     }
-    
-    const userId = req.params.userId;
-    
-    // Find user preferences
-    const userPref = userPreferences.user_preferences.find(
-        user => user.user_id === userId
-    );
-    
-    if (!userPref) {
-        return res.status(404).json({
-            success: false,
-            message: 'User not found'
-        });
-    }
-    
-    // Get user's order history
-    const userOrders = orderHistory.orders.filter(
-        order => order.user_id === userId
-    );
-    
-    // Recommend restaurants based on preferences
-    const recommendedRestaurants = restaurants.restaurants.filter(restaurant => {
-        // Check if restaurant serves user's favorite cuisines
-        return restaurant.cuisine.some(c => 
-            userPref.favorite_cuisines.includes(c)
-        );
-    }).slice(0, 5); // Top 5 recommendations
-    
-    res.json({
-        success: true,
-        user_preferences: userPref,
-        order_count: userOrders.length,
-        recommendations: recommendedRestaurants,
-        last_order: userOrders[userOrders.length - 1] || null
-    });
 });
 
-// AI-Powered Chatbot Endpoint
+// =============== ORDER ROUTES ===============
+// Place an order
+app.post('/api/order', async (req, res) => {
+    try {
+        const { userId, restaurantId, items, deliveryAddress, paymentMethod, specialInstructions } = req.body;
+        
+        // Validation
+        if (!userId || !restaurantId || !items || !deliveryAddress) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+        
+        // Verify user and restaurant exist
+        const user = await User.findById(userId);
+        const restaurant = await Restaurant.findById(restaurantId);
+        
+        if (!user || !restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'User or restaurant not found'
+            });
+        }
+        
+        // Calculate pricing
+        let subtotal = 0;
+        const orderItems = [];
+        
+        for (const item of items) {
+            const menuItem = await MenuItem.findById(item.menuItemId);
+            if (menuItem) {
+                const itemTotal = menuItem.price * item.quantity;
+                subtotal += itemTotal;
+                
+                orderItems.push({
+                    menuItem: menuItem._id,
+                    quantity: item.quantity,
+                    price: menuItem.price,
+                    specialInstructions: item.specialInstructions || ''
+                });
+            }
+        }
+        
+        const deliveryFee = restaurant.deliveryFee;
+        const total = subtotal + deliveryFee;
+        
+        // Create order
+        const newOrder = new Order({
+            user: userId,
+            restaurant: restaurantId,
+            items: orderItems,
+            deliveryAddress: deliveryAddress,
+            paymentMethod: paymentMethod || 'Cash on Delivery',
+            specialInstructions: specialInstructions || '',
+            pricing: {
+                subtotal: subtotal,
+                deliveryFee: deliveryFee,
+                tax: 0,
+                total: total
+            },
+            estimatedDeliveryTime: new Date(Date.now() + 45 * 60000) // 45 minutes from now
+        });
+        
+        // Add to status history
+        newOrder.statusHistory.push({
+            status: 'Confirmed',
+            timestamp: new Date(),
+            note: 'Order has been confirmed'
+        });
+        
+        await newOrder.save();
+        
+        // Populate the order for response
+        await newOrder.populate(['user', 'restaurant', 'items.menuItem']);
+        
+        res.json({
+            success: true,
+            message: "Order placed successfully!",
+            order: newOrder
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error placing order',
+            error: error.message
+        });
+    }
+});
+
+// Get user's orders
+app.get('/api/orders/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        
+        const orders = await Order.find({ user: userId })
+            .populate('restaurant')
+            .populate('items.menuItem')
+            .sort({ createdAt: -1 });
+        
+        res.json({
+            success: true,
+            count: orders.length,
+            orders: orders
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching orders',
+            error: error.message
+        });
+    }
+});
+
+// =============== CHAT ROUTE ===============
 app.post('/api/chat', async (req, res) => {
-    const { message, userId } = req.body;
+    const { message, userId, isOnboarding } = req.body;
     
     if (!message) {
         return res.status(400).json({
@@ -210,14 +340,34 @@ app.post('/api/chat', async (req, res) => {
     }
     
     try {
-        // Use AI chatbot
+        // Get data for chatbot
+        const restaurants = await Restaurant.find({ isActive: true });
+        const menuItems = await MenuItem.find({ isAvailable: true });
+        
+        let userPreferences = null;
+        let orderHistory = [];
+        
+        if (userId && userId !== 'guest') {
+            const user = await User.findById(userId);
+            if (user) {
+                userPreferences = user.preferences;
+                orderHistory = await Order.find({ user: userId }).populate('restaurant');
+            }
+        }
+        
+        // Convert to format expected by chatbot
+        const restaurantData = { restaurants: restaurants };
+        const menuData = { menu_items: menuItems };
+        const orderData = { orders: orderHistory };
+        const userPrefData = userPreferences ? { user_preferences: [userPreferences] } : { user_preferences: [] };
+        
         const chatbotData = await getChatbotResponse(
             message,
             userId || 'guest',
-            restaurants.restaurants,
-            menuItems.menu_items,
-            orderHistory,
-            userPreferences
+            restaurantData.restaurants,
+            menuData.menu_items,
+            orderData,
+            userPrefData
         );
         
         res.json({
@@ -225,40 +375,34 @@ app.post('/api/chat', async (req, res) => {
             user_message: message,
             bot_response: chatbotData.response,
             recommendations: chatbotData.recommendations,
-            user_context: chatbotData.context
+            user_context: chatbotData.context,
+            needsOnboarding: chatbotData.needsOnboarding,
+            needsConfirmation: chatbotData.needsConfirmation,
+            orderIntent: chatbotData.orderIntent,
+            orderPlaced: chatbotData.orderPlaced,
+            orderDetails: chatbotData.orderDetails
         });
         
     } catch (error) {
         console.error('Chat error:', error);
         
-        // Fallback to simple response if AI fails
+        // Fallback response
         const lowerMessage = message.toLowerCase();
         let response = '';
         let recommendations = [];
         
         if (lowerMessage.includes('biryani')) {
-            recommendations = restaurants.restaurants.filter(r => 
-                r.cuisine.some(c => c.toLowerCase().includes('biryani')) || 
-                r.name.toLowerCase().includes('biryani')
-            );
+            const biryaniRestaurants = await Restaurant.find({
+                isActive: true,
+                $or: [
+                    { cuisine: { $regex: 'biryani', $options: 'i' } },
+                    { name: { $regex: 'biryani', $options: 'i' } }
+                ]
+            });
+            recommendations = biryaniRestaurants;
             response = "Here are great biryani options! Student Biryani is highly recommended for authentic taste.";
-        } else if (lowerMessage.includes('hungry') || lowerMessage.includes('bhook')) {
-            response = "I'd love to help! What type of food are you craving? We have Pakistani, Chinese, Fast Food, BBQ, and more!";
-        } else if (lowerMessage.includes('pizza')) {
-            recommendations = restaurants.restaurants.filter(r => 
-                r.cuisine.some(c => c.toLowerCase().includes('pizza')) || 
-                r.name.toLowerCase().includes('pizza')
-            );
-            response = "Pizza coming right up! Check out these options:";
-        } else if (lowerMessage.includes('cheap') || lowerMessage.includes('budget')) {
-            recommendations = restaurants.restaurants.filter(r => 
-                r.price_range === 'Budget' || r.price_range === 'Moderate'
-            );
-            response = "Here are some budget-friendly options that don't compromise on taste:";
-        } else if (lowerMessage.includes('order') || lowerMessage.includes('place order')) {
-            response = "Sure! To place an order, please tell me:\n1. Which restaurant?\n2. What items would you like?\n3. Your delivery address?";
         } else {
-            response = "I'm here to help you order delicious food! You can ask me about:\n- Restaurant recommendations\n- Specific cuisines (Biryani, Pizza, Chinese, etc.)\n- Budget-friendly options\n- How to place an order\n\nWhat sounds good to you today?";
+            response = "I'm here to help you order delicious food! You can ask me about restaurant recommendations, specific cuisines, or how to place an order. What sounds good to you today?";
         }
         
         res.json({
@@ -270,115 +414,86 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Place an order
-app.post('/api/order', (req, res) => {
-    const { userId, restaurantId, items, deliveryAddress, paymentMethod } = req.body;
-    
-    if (!userId || !restaurantId || !items || !deliveryAddress) {
-        return res.status(400).json({
+// =============== SEARCH ROUTE ===============
+app.get('/api/search', async (req, res) => {
+    try {
+        const { query } = req.query;
+        
+        if (!query) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a search query'
+            });
+        }
+        
+        const searchResults = await Restaurant.find({
+            isActive: true,
+            $or: [
+                { name: { $regex: query, $options: 'i' } },
+                { cuisine: { $regex: query, $options: 'i' } },
+                { description: { $regex: query, $options: 'i' } }
+            ]
+        }).sort({ rating: -1 });
+        
+        res.json({
+            success: true,
+            query: query,
+            count: searchResults.length,
+            results: searchResults
+        });
+    } catch (error) {
+        res.status(500).json({
             success: false,
-            message: 'Missing required fields: userId, restaurantId, items, deliveryAddress'
+            message: 'Search error',
+            error: error.message
         });
     }
-    
-    // Calculate total
-    let subtotal = 0;
-    items.forEach(item => {
-        subtotal += item.unit_price * item.quantity;
-    });
-    
-    // Get delivery fee based on area
-    const deliveryFee = 50; // Default delivery fee
-    
-    const newOrder = {
-        order_id: `ORD${Date.now()}`,
-        user_id: userId,
-        restaurant_id: restaurantId,
-        items: items,
-        subtotal: subtotal,
-        delivery_fee: deliveryFee,
-        grand_total: subtotal + deliveryFee,
-        delivery_address: deliveryAddress,
-        payment_method: paymentMethod || "Cash on Delivery",
-        order_date: new Date().toISOString().split('T')[0],
-        order_time: new Date().toLocaleTimeString('en-US'),
-        status: "confirmed",
-        estimated_delivery: "30-45 minutes"
-    };
-    
-    // In a real app, you would save this to a database
-    // For now, we'll just return the order
-    res.json({
-        success: true,
-        message: "Order placed successfully!",
-        order: newOrder
-    });
 });
 
-// Get delivery areas
-app.get('/api/areas/:city', (req, res) => {
-    if (!areas || !areas.cities) {
-        return res.status(500).json({
+// =============== AREAS ROUTE ===============
+app.get('/api/areas/:city', async (req, res) => {
+    try {
+        const city = req.params.city.toLowerCase();
+        
+        // For now, return static Karachi areas
+        // Later you can store this in MongoDB too
+        const karachiAreas = [
+            "Gulshan-e-Iqbal", "North Nazimabad", "Clifton", "Defence (DHA)",
+            "Korangi", "Landhi", "Malir", "Shah Faisal Colony", "Gulistan-e-Johar",
+            "FB Area", "PECHS", "Nazimabad", "Liaquatabad", "New Karachi",
+            "Orangi Town", "Baldia Town", "Site Area", "Lyari", "Saddar",
+            "Garden", "Civil Lines", "II Chundrigar Road", "Empress Market",
+            "Tariq Road", "Bahadurabad", "Shahra-e-Faisal"
+        ];
+        
+        if (city === 'karachi') {
+            res.json({
+                success: true,
+                city: city,
+                areas: karachiAreas
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'City not found'
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
             success: false,
-            message: 'Areas data not loaded'
+            message: 'Error fetching areas',
+            error: error.message
         });
     }
-    
-    const city = req.params.city.toLowerCase();
-    const cityAreas = areas.cities[city];
-    
-    if (!cityAreas) {
-        return res.status(404).json({
-            success: false,
-            message: 'City not found'
-        });
-    }
-    
-    res.json({
-        success: true,
-        city: city,
-        areas: cityAreas.areas
-    });
 });
 
-// Search restaurants
-app.get('/api/search', (req, res) => {
-    if (!restaurants || !restaurants.restaurants) {
-        return res.status(500).json({
-            success: false,
-            message: 'Restaurant data not loaded'
-        });
-    }
-    
-    const { query } = req.query;
-    
-    if (!query) {
-        return res.status(400).json({
-            success: false,
-            message: 'Please provide a search query'
-        });
-    }
-    
-    const searchResults = restaurants.restaurants.filter(r => 
-        r.name.toLowerCase().includes(query.toLowerCase()) ||
-        r.cuisine.some(c => c.toLowerCase().includes(query.toLowerCase()))
-    );
-    
-    res.json({
-        success: true,
-        query: query,
-        count: searchResults.length,
-        results: searchResults
-    });
-});
-
-// Error handling middleware
+// =============== ERROR HANDLING ===============
 app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
     res.status(500).json({
         success: false,
         message: 'Something went wrong!',
-        error: err.message
+        error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error'
     });
 });
 
@@ -387,9 +502,5 @@ app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log('📍 Your API endpoints are ready!');
     console.log('🍕 Happy food ordering!');
-    console.log('\n📊 Data Status:');
-    console.log(`   - Restaurants loaded: ${restaurants?.restaurants?.length || 0}`);
-    console.log(`   - Menu items loaded: ${menuItems?.menu_items?.length || 0}`);
-    console.log(`   - Users loaded: ${userPreferences?.user_preferences?.length || 0}`);
-    console.log(`   - Orders loaded: ${orderHistory?.orders?.length || 0}`);
+    console.log('💾 Using MongoDB database');
 });

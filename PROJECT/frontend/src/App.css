@@ -341,6 +341,19 @@ body {
   align-items: center;
 }
 
+.chat-header h3 {
+  margin: 0;
+}
+
+.onboarding-badge {
+  background-color: #f39c12;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  margin-left: auto;
+  margin-right: 1rem;
+}
+
 .chat-header button {
   background: none;
   border: none;
@@ -360,6 +373,28 @@ body {
   text-align: center;
   color: #7f8c8d;
   padding: 2rem;
+}
+
+.chat-welcome-container {
+  text-align: center;
+  padding: 2rem;
+}
+
+.start-onboarding-btn {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-top: 1rem;
+  transition: all 0.3s;
+}
+
+.start-onboarding-btn:hover {
+  background-color: #229954;
+  transform: translateY(-2px);
 }
 
 .message {
@@ -1028,4 +1063,227 @@ body {
 .social-button img {
   width: 20px;
   height: 20px;
+}
+
+/* Admin Dashboard Styles */
+.admin-button {
+  background-color: #9b59b6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s;
+}
+
+.admin-button:hover {
+  background-color: #8e44ad;
+}
+
+.admin-dashboard {
+  width: 100%;
+  padding: 2rem;
+}
+
+.admin-dashboard h2 {
+  color: #2c3e50;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.stat-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.stat-card h3 {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  font-weight: normal;
+}
+
+.stat-number {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0.5rem 0;
+}
+
+.stat-change {
+  color: #27ae60;
+  font-size: 0.85rem;
+}
+
+/* Admin Sections */
+.admin-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.admin-section h3 {
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  display: inline-block;
+}
+
+.add-new-button {
+  float: right;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.3s;
+}
+
+.add-new-button:hover {
+  background-color: #2980b9;
+}
+
+/* Admin Table */
+.admin-table {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.admin-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  background-color: #f8f9fa;
+  color: #2c3e50;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #ecf0f1;
+}
+
+.admin-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.admin-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-badge.active {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-badge.preparing {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.delivered {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+/* Action Buttons */
+.edit-btn, .delete-btn, .view-btn, .update-btn {
+  padding: 0.3rem 0.8rem;
+  margin: 0 0.2rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background-color 0.3s;
+}
+
+.edit-btn {
+  background-color: #3498db;
+  color: white;
+}
+
+.edit-btn:hover {
+  background-color: #2980b9;
+}
+
+.delete-btn {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #c0392b;
+}
+
+.view-btn {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.view-btn:hover {
+  background-color: #7f8c8d;
+}
+
+.update-btn {
+  background-color: #f39c12;
+  color: white;
+}
+
+.update-btn:hover {
+  background-color: #e67e22;
+}
+
+/* Top Items Grid */
+.top-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.top-item {
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+}
+
+.top-item h4 {
+  color: #2c3e50;
+  margin-bottom: 0.3rem;
+}
+
+.top-item p {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  margin: 0.2rem 0;
+}
+
+.item-sales {
+  color: #27ae60;
+  font-weight: bold;
 }

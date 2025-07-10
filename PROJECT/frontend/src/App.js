@@ -2,6 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
+
+// Onboarding questions
+const onboardingQuestions = [
+  "What's your favorite type of cuisine? (Pakistani, Chinese, Fast Food, BBQ, etc.)",
+  "How spicy do you like your food? (1-5 scale, where 1 is mild and 5 is very spicy)",
+  "Do you have any dietary restrictions? (vegetarian, vegan, halal only, allergies)",
+  "What's your usual budget per meal? (under 500, 500-1000, 1000+)",
+  "What time do you usually order food? (breakfast, lunch, dinner, late night)"
+];
+
 function App() {
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
@@ -10,6 +20,16 @@ function App() {
   const [showChat, setShowChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
+  // Simplified onboarding questions
+  const onboardingQuestions = [
+    "What's your favorite type of cuisine? (Pakistani, Chinese, Fast Food, BBQ, etc.)",
+    "How spicy do you like your food? (1-5 scale, where 1 is mild and 5 is very spicy)",
+    "Do you have any dietary restrictions? (vegetarian, vegan, halal only, allergies)",
+    "What's your usual budget per meal? (under 500, 500-1000, 1000+)",
+    "What time do you usually order food? (breakfast, lunch, dinner, late night)"
+  ];
+
+  
   const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -31,7 +51,9 @@ function App() {
     password: '',
     phone: ''
   });
-
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState(null);
+  const [isNewUser, setIsNewUser] = useState(false);
   // Load restaurants when app starts
   useEffect(() => {
     fetchRestaurants();
@@ -44,6 +66,33 @@ function App() {
       setCurrentUser(JSON.parse(savedUser));
     }
   }, []);
+
+  // Check if user is new when they login
+  useEffect(() => {
+    console.log('Current user changed:', currentUser);
+    if (currentUser && !currentUser.isAdmin) {
+      // Check if user has preferences saved
+      const userPrefs = localStorage.getItem(`userPrefs_${currentUser.id}`);
+      console.log('User preferences:', userPrefs);
+      
+      if (!userPrefs || currentUser.isNewUser) {
+        console.log('New user detected, starting onboarding...');
+        setIsNewUser(true);
+        setShowChat(true);
+        // Send initial message to start onboarding
+        setMessages([{
+          role: 'bot',
+          content: "Welcome! I'm your personal food assistant. To give you the best recommendations, I'd like to know a bit about your preferences. Let's start with a simple question:",
+          isOnboarding: true
+        }]);
+        
+        // Trigger first question
+        setTimeout(() => {
+          sendOnboardingMessage();
+        }, 1500);
+      }
+    }
+  }, [currentUser]);
 
   // Fetch all restaurants
   const fetchRestaurants = async () => {
@@ -112,6 +161,20 @@ function App() {
     return { subtotal, deliveryFee, total: subtotal + deliveryFee };
   };
 
+  // Send onboarding message - simplified
+  const sendOnboardingMessage = async () => {
+    console.log('Sending onboarding message...');
+    
+    // For now, let's just add the first question directly
+    const firstQuestion = "What's your favorite type of cuisine? (Pakistani, Chinese, Fast Food, BBQ, etc.)";
+    
+    setMessages(prev => [...prev, { 
+      role: 'bot', 
+      content: firstQuestion,
+      isOnboarding: true
+    }]);
+  };
+
   // Send message to chatbot
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -123,19 +186,62 @@ function App() {
       const response = await fetch('http://localhost:5000/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: inputMessage, userId: currentUser?.id || 'guest' })
+        body: JSON.stringify({ 
+          message: inputMessage, 
+          userId: currentUser?.id || 'guest',
+          isOnboarding: isNewUser 
+        })
       });
       const data = await response.json();
+      
+      // Check if this completes onboarding
+      if (data.needsOnboarding === false && isNewUser) {
+        setIsNewUser(false);
+        // Save user preferences
+        localStorage.setItem(`userPrefs_${currentUser.id}`, JSON.stringify(data.context));
+      }
+      
+      // Check if order needs confirmation
+      if (data.needsConfirmation && data.orderIntent) {
+        setPendingOrder(data.orderIntent);
+      }
+      
+      // Check if order was placed
+      if (data.orderPlaced && data.orderDetails) {
+        // Add items to cart and place order
+        const orderItems = data.orderDetails.items.map(item => ({
+          ...item,
+          restaurant_id: data.orderDetails.restaurant.id
+        }));
+        
+        setCart(orderItems);
+        
+        // Automatically fill delivery address if saved
+        const savedAddress = localStorage.getItem(`address_${currentUser.id}`);
+        if (savedAddress) {
+          setDeliveryAddress(JSON.parse(savedAddress));
+        }
+        
+        // Show checkout modal
+        setTimeout(() => {
+          setShowCheckout(true);
+        }, 1000);
+      }
       
       // Add bot response
       setMessages(prev => [...prev, { 
         role: 'bot', 
         content: data.bot_response,
-        recommendations: data.recommendations 
+        recommendations: data.recommendations,
+        isOnboarding: data.needsOnboarding
       }]);
       
     } catch (error) {
       console.error('Error sending message:', error);
+      setMessages(prev => [...prev, { 
+        role: 'bot', 
+        content: "Sorry, I'm having trouble connecting. Please try again."
+      }]);
     }
 
     setInputMessage('');
@@ -162,12 +268,33 @@ function App() {
   const handleLogin = async (e) => {
     e.preventDefault();
     
+    // Check for admin login
+    if (authForm.email === 'admin@food.pk' && authForm.password === 'admin123') {
+      const adminUser = {
+        id: 'admin',
+        name: 'Admin',
+        email: authForm.email,
+        isAdmin: true
+      };
+      
+      setCurrentUser(adminUser);
+      localStorage.setItem('currentUser', JSON.stringify(adminUser));
+      setShowAuth(false);
+      setShowAdminDashboard(true);
+      alert('Welcome Admin!');
+      
+      setAuthForm({ name: '', email: '', password: '', phone: '' });
+      return;
+    }
+    
+    // Regular user login
     if (authForm.email && authForm.password) {
       const user = {
         id: 'user_001',
         name: authForm.name || 'Guest User',
         email: authForm.email,
-        phone: authForm.phone
+        phone: authForm.phone,
+        isAdmin: false
       };
       
       setCurrentUser(user);
@@ -188,13 +315,28 @@ function App() {
         id: `user_${Date.now()}`,
         name: authForm.name,
         email: authForm.email,
-        phone: authForm.phone
+        phone: authForm.phone,
+        isAdmin: false,
+        isNewUser: true
       };
       
       setCurrentUser(newUser);
       localStorage.setItem('currentUser', JSON.stringify(newUser));
       setShowAuth(false);
-      alert(`Welcome to Pakistani Food Delivery, ${newUser.name}!`);
+      setIsNewUser(true);
+      setShowChat(true); // Automatically open chat for onboarding
+      
+      // Welcome message
+      setMessages([{
+        role: 'bot',
+        content: `Welcome to Pakistani Food Delivery, ${newUser.name}! I'm your personal food assistant. Let me get to know your preferences so I can give you the best recommendations. 🎉`,
+        isOnboarding: true
+      }]);
+      
+      // Start onboarding after a delay
+      setTimeout(() => {
+        sendOnboardingMessage();
+      }, 2000);
       
       setAuthForm({ name: '', email: '', password: '', phone: '' });
     }
@@ -244,6 +386,9 @@ function App() {
       const data = await response.json();
       
       if (data.success) {
+        // Save delivery address for future use
+        localStorage.setItem(`address_${currentUser.id}`, JSON.stringify(deliveryAddress));
+        
         setOrderStatus(data.order);
         setCart([]); // Clear cart
         setShowCheckout(false);
@@ -270,6 +415,11 @@ function App() {
           {currentUser ? (
             <div className="user-menu">
               <span className="user-name">👤 {currentUser.name}</span>
+              {currentUser.isAdmin && (
+                <button onClick={() => setShowAdminDashboard(!showAdminDashboard)} className="admin-button">
+                  {showAdminDashboard ? '🏠 Customer View' : '📊 Admin Dashboard'}
+                </button>
+              )}
               <button onClick={handleLogout} className="logout-button">Logout</button>
             </div>
           ) : (
@@ -292,6 +442,139 @@ function App() {
       </header>
 
       <div className="main-container">
+        {/* Show Admin Dashboard or Regular Content */}
+        {showAdminDashboard && currentUser?.isAdmin ? (
+          // Admin Dashboard
+          <div className="admin-dashboard">
+            <h2>Admin Dashboard</h2>
+            
+            {/* Stats Overview */}
+            <div className="stats-grid">
+              <div className="stat-card">
+                <h3>Total Orders</h3>
+                <p className="stat-number">156</p>
+                <p className="stat-change">+12% this week</p>
+              </div>
+              <div className="stat-card">
+                <h3>Total Revenue</h3>
+                <p className="stat-number">Rs. 125,430</p>
+                <p className="stat-change">+18% this week</p>
+              </div>
+              <div className="stat-card">
+                <h3>Active Restaurants</h3>
+                <p className="stat-number">{restaurants.length}</p>
+                <p className="stat-change">5 restaurants</p>
+              </div>
+              <div className="stat-card">
+                <h3>Total Customers</h3>
+                <p className="stat-number">89</p>
+                <p className="stat-change">+5 new this week</p>
+              </div>
+            </div>
+
+            {/* Restaurant Management */}
+            <div className="admin-section">
+              <h3>Restaurant Management</h3>
+              <button className="add-new-button">+ Add New Restaurant</button>
+              <div className="admin-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Cuisine</th>
+                      <th>Rating</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {restaurants && restaurants.map(restaurant => (
+                      <tr key={restaurant.id}>
+                        <td>{restaurant.id}</td>
+                        <td>{restaurant.name}</td>
+                        <td>{restaurant.cuisine?.join(', ') || 'N/A'}</td>
+                        <td>⭐ {restaurant.rating}</td>
+                        <td><span className="status-badge active">Active</span></td>
+                        <td>
+                          <button className="edit-btn">Edit</button>
+                          <button className="delete-btn">Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Recent Orders */}
+            <div className="admin-section">
+              <h3>Recent Orders</h3>
+              <div className="admin-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Order ID</th>
+                      <th>Customer</th>
+                      <th>Restaurant</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>#ORD1234</td>
+                      <td>Ahmed Khan</td>
+                      <td>Student Biryani</td>
+                      <td>Rs. 720</td>
+                      <td><span className="status-badge preparing">Preparing</span></td>
+                      <td>
+                        <button className="view-btn">View</button>
+                        <button className="update-btn">Update Status</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>#ORD1235</td>
+                      <td>Fatima Ali</td>
+                      <td>KFC Pakistan</td>
+                      <td>Rs. 1,650</td>
+                      <td><span className="status-badge delivered">Delivered</span></td>
+                      <td>
+                        <button className="view-btn">View</button>
+                        <button className="update-btn">Update Status</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Top Selling Items */}
+            <div className="admin-section">
+              <h3>Top Selling Items</h3>
+              <div className="top-items-grid">
+                <div className="top-item">
+                  <h4>1. Chicken Biryani</h4>
+                  <p>Student Biryani</p>
+                  <p className="item-sales">245 orders</p>
+                </div>
+                <div className="top-item">
+                  <h4>2. Zinger Burger</h4>
+                  <p>KFC Pakistan</p>
+                  <p className="item-sales">189 orders</p>
+                </div>
+                <div className="top-item">
+                  <h4>3. Chicken Tikka Pizza</h4>
+                  <p>Pizza Hut</p>
+                  <p className="item-sales">156 orders</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Regular Customer View */}
         {/* Left Side - Restaurants or Menu */}
         <div className="content">
           {!selectedRestaurant ? (
@@ -302,7 +585,7 @@ function App() {
                 <p>Loading restaurants...</p>
               ) : restaurants && restaurants.length > 0 ? (
                 <div className="restaurant-grid">
-                  {restaurants.map(restaurant => (
+                  {restaurants && restaurants.map(restaurant => (
                     <div 
                       key={restaurant.id} 
                       className="restaurant-card"
@@ -330,7 +613,7 @@ function App() {
                 ← Back to Restaurants
               </button>
               <h2>{selectedRestaurant.name} Menu</h2>
-              {menu.length > 0 ? (
+                {menu && menu.length > 0 ? (
                 <div className="menu-grid">
                   {menu.map(item => (
                     <div key={item.id} className="menu-item">
@@ -390,6 +673,8 @@ function App() {
             </>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* Chatbot */}
@@ -397,11 +682,30 @@ function App() {
         <div className="chatbot">
           <div className="chat-header">
             <h3>Food Assistant 🤖</h3>
+            {isNewUser && <span className="onboarding-badge">Setting up your profile...</span>}
             <button onClick={() => setShowChat(false)}>✖</button>
           </div>
           <div className="chat-messages">
             {messages.length === 0 && (
-              <p className="chat-welcome">Hi! I can help you find the perfect meal. What are you craving today?</p>
+              <div className="chat-welcome-container">
+                <p className="chat-welcome">Hi! I can help you find the perfect meal. What are you craving today?</p>
+                {currentUser && !localStorage.getItem(`userPrefs_${currentUser.id}`) && (
+                  <button 
+                    className="start-onboarding-btn"
+                    onClick={() => {
+                      setIsNewUser(true);
+                      setMessages([{
+                        role: 'bot',
+                        content: "Welcome! I'm your personal food assistant. Let me learn about your preferences to give you the best recommendations. 🍕",
+                        isOnboarding: true
+                      }]);
+                      setTimeout(() => sendOnboardingMessage(), 1000);
+                    }}
+                  >
+                    🎯 Set Up My Preferences
+                  </button>
+                )}
+              </div>
             )}
             {messages.map((msg, index) => (
               <div key={index}>
