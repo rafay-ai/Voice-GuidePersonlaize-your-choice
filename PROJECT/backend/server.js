@@ -248,8 +248,13 @@ app.post('/api/order', async (req, res) => {
         const deliveryFee = restaurant.deliveryFee;
         const total = subtotal + deliveryFee;
         
+        // Generate order number
+        const orderCount = await Order.countDocuments();
+        const orderNumber = `FD${Date.now().toString().slice(-6)}${(orderCount + 1).toString().padStart(3, '0')}`;
+        
         // Create order
         const newOrder = new Order({
+            orderNumber: orderNumber,
             user: userId,
             restaurant: restaurantId,
             items: orderItems,
@@ -284,6 +289,7 @@ app.post('/api/order', async (req, res) => {
         });
         
     } catch (error) {
+        console.error('Order creation error:', error);
         res.status(500).json({
             success: false,
             message: 'Error placing order',

@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 
-const Restaurant = require('./models/Restaurant');
-const MenuItem = require('./models/MenuItem');
-const User = require('./models/User');
+const Restaurant = require('../models/Restaurant');
+const MenuItem = require('../models/MenuItem');
+const User = require('../models/User');
 
 const connectDB = async () => {
     try {
@@ -19,7 +19,7 @@ const connectDB = async () => {
 
 const loadJSONData = (filename) => {
     try {
-        const filePath = path.join(__dirname, 'data', filename);
+        const filePath = path.join(__dirname, '../data', filename);
         console.log(`📄 Loading: ${filePath}`);
         
         if (!fs.existsSync(filePath)) {

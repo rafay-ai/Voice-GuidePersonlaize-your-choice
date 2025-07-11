@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-
 // Onboarding questions
 const onboardingQuestions = [
   "What's your favorite type of cuisine? (Pakistani, Chinese, Fast Food, BBQ, etc.)",
@@ -20,15 +19,6 @@ function App() {
   const [showChat, setShowChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
-  // Simplified onboarding questions
-  const onboardingQuestions = [
-    "What's your favorite type of cuisine? (Pakistani, Chinese, Fast Food, BBQ, etc.)",
-    "How spicy do you like your food? (1-5 scale, where 1 is mild and 5 is very spicy)",
-    "Do you have any dietary restrictions? (vegetarian, vegan, halal only, allergies)",
-    "What's your usual budget per meal? (under 500, 500-1000, 1000+)",
-    "What time do you usually order food? (breakfast, lunch, dinner, late night)"
-  ];
-
   
   const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -54,6 +44,7 @@ function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
   const [isNewUser, setIsNewUser] = useState(false);
+  
   // Load restaurants when app starts
   useEffect(() => {
     fetchRestaurants();
@@ -132,15 +123,15 @@ function App() {
   // Handle restaurant selection
   const selectRestaurant = (restaurant) => {
     setSelectedRestaurant(restaurant);
-    fetchMenu(restaurant.id);
+    fetchMenu(restaurant._id);
   };
 
   // Add item to cart
   const addToCart = (item) => {
-    const existingItem = cart.find(cartItem => cartItem.id === item.id);
+    const existingItem = cart.find(cartItem => cartItem._id === item._id);
     if (existingItem) {
       setCart(cart.map(cartItem => 
-        cartItem.id === item.id 
+        cartItem._id === item._id 
           ? { ...cartItem, quantity: cartItem.quantity + 1 }
           : cartItem
       ));
@@ -151,7 +142,7 @@ function App() {
 
   // Remove from cart
   const removeFromCart = (itemId) => {
-    setCart(cart.filter(item => item.id !== itemId));
+    setCart(cart.filter(item => item._id !== itemId));
   };
 
   // Calculate total
@@ -351,60 +342,75 @@ function App() {
 
   // Place order function
   const placeOrder = async () => {
-    if (!currentUser) {
-      alert('Please login to place an order');
-      setShowCheckout(false);
-      setShowAuth(true);
-      return;
-    }
+  if (!currentUser) {
+    alert('Please login to place an order');
+    setShowCheckout(false);
+    setShowAuth(true);
+    return;
+  }
 
-    if (!deliveryAddress.name || !deliveryAddress.phone || !deliveryAddress.area || !deliveryAddress.street) {
-      alert('Please fill in all delivery details');
-      return;
-    }
+  if (!deliveryAddress.name || !deliveryAddress.phone || !deliveryAddress.area || !deliveryAddress.street) {
+    alert('Please fill in all delivery details');
+    return;
+  }
 
-    const orderData = {
-      userId: currentUser.id,
-      userEmail: currentUser.email,
-      restaurantId: cart[0].restaurant_id,
-      items: cart.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        unit_price: item.price
-      })),
-      deliveryAddress: deliveryAddress,
-      paymentMethod: 'Cash on Delivery'
-    };
+  const restaurantId = selectedRestaurant?._id;
+  
+  if (!restaurantId) {
+    alert('Restaurant information missing. Please try again.');
+    return;
+  }
 
-    try {
-      const response = await fetch('http://localhost:5000/api/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData)
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        // Save delivery address for future use
-        localStorage.setItem(`address_${currentUser.id}`, JSON.stringify(deliveryAddress));
-        
-        setOrderStatus(data.order);
-        setCart([]); // Clear cart
-        setShowCheckout(false);
-        setShowOrderTracking(true); // Show tracking instead of alert
-        setCurrentOrderStatus('confirmed');
-        
-        // Simulate order progress
-        setTimeout(() => setCurrentOrderStatus('preparing'), 3000);
-        setTimeout(() => setCurrentOrderStatus('on-the-way'), 10000);
-        setTimeout(() => setCurrentOrderStatus('delivered'), 20000);
-      }
-    } catch (error) {
-      console.error('Error placing order:', error);
-      alert('Failed to place order. Please try again.');
-    }
+  const orderData = {
+    userId: "686fabb1c1fb439f2e230c81", // Your actual admin user ObjectId
+    restaurantId: restaurantId,
+    items: cart.map(item => ({
+      menuItemId: item._id,
+      quantity: item.quantity,
+      specialInstructions: ''
+    })),
+    deliveryAddress: {
+      street: deliveryAddress.street,
+      area: deliveryAddress.area,
+      city: "Karachi",
+      phone: deliveryAddress.phone
+    },
+    paymentMethod: 'Cash on Delivery',
+    specialInstructions: deliveryAddress.instructions || ''
   };
+
+  console.log('Sending order data:', orderData);
+
+  try {
+    const response = await fetch('http://localhost:5000/api/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData)
+    });
+    
+    const data = await response.json();
+    console.log('Order response:', data);
+    
+    if (data.success) {
+      localStorage.setItem(`address_${currentUser.id}`, JSON.stringify(deliveryAddress));
+      setOrderStatus(data.order);
+      setCart([]);
+      setShowCheckout(false);
+      setShowOrderTracking(true);
+      setCurrentOrderStatus('confirmed');
+      
+      setTimeout(() => setCurrentOrderStatus('preparing'), 3000);
+      setTimeout(() => setCurrentOrderStatus('on-the-way'), 10000);
+      setTimeout(() => setCurrentOrderStatus('delivered'), 20000);
+    } else {
+      console.error('Order failed:', data);
+      alert(`Order failed: ${data.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error placing order:', error);
+    alert('Failed to place order. Please try again.');
+  }
+};
 
   return (
     <div className="App">
@@ -490,8 +496,8 @@ function App() {
                   </thead>
                   <tbody>
                     {restaurants && restaurants.map(restaurant => (
-                      <tr key={restaurant.id}>
-                        <td>{restaurant.id}</td>
+                      <tr key={restaurant._id}>
+                        <td>{restaurant._id}</td>
                         <td>{restaurant.name}</td>
                         <td>{restaurant.cuisine?.join(', ') || 'N/A'}</td>
                         <td>⭐ {restaurant.rating}</td>
@@ -587,7 +593,7 @@ function App() {
                 <div className="restaurant-grid">
                   {restaurants && restaurants.map(restaurant => (
                     <div 
-                      key={restaurant.id} 
+                      key={restaurant._id} 
                       className="restaurant-card"
                       onClick={() => selectRestaurant(restaurant)}
                     >
@@ -595,10 +601,10 @@ function App() {
                       <p className="cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Cuisine not specified'}</p>
                       <div className="restaurant-info">
                         <span>⭐ {restaurant.rating}</span>
-                        <span>{getPriceRangeDisplay(restaurant.price_range)}</span>
-                        <span>🚚 {restaurant.delivery_time}</span>
+                        <span>{getPriceRangeDisplay(restaurant.priceRange)}</span>
+                        <span>🚚 {restaurant.deliveryTime}</span>
                       </div>
-                      <p className="min-order">Min order: Rs. {restaurant.minimum_order}</p>
+                      <p className="min-order">Min order: Rs. {restaurant.minimumOrder}</p>
                     </div>
                   ))}
                 </div>
@@ -616,7 +622,7 @@ function App() {
                 {menu && menu.length > 0 ? (
                 <div className="menu-grid">
                   {menu.map(item => (
-                    <div key={item.id} className="menu-item">
+                    <div key={item._id} className="menu-item">
                       <div className="item-info">
                         <h4>{item.name}</h4>
                         <p>{item.description}</p>
@@ -646,7 +652,7 @@ function App() {
           ) : (
             <>
               {cart.map(item => (
-                <div key={item.id} className="cart-item">
+                <div key={item._id} className="cart-item">
                   <div>
                     <p>{item.name}</p>
                     <p className="quantity">Qty: {item.quantity} × Rs. {item.price}</p>
@@ -654,7 +660,7 @@ function App() {
                   <div>
                     <p>Rs. {item.price * item.quantity}</p>
                     <button 
-                      onClick={() => removeFromCart(item.id)}
+                      onClick={() => removeFromCart(item._id)}
                       className="remove-button"
                     >
                       ❌
@@ -721,8 +727,8 @@ function App() {
                         <p>{restaurant.cuisine.join(', ')}</p>
                         <div className="restaurant-info-small">
                           <span>⭐ {restaurant.rating}</span>
-                          <span>{restaurant.price_range}</span>
-                          <span>🚚 {restaurant.delivery_time}</span>
+                          <span>{restaurant.priceRange}</span>
+                          <span>🚚 {restaurant.deliveryTime}</span>
                         </div>
                       </div>
                     ))}
@@ -815,7 +821,7 @@ function App() {
               <div className="order-summary">
                 <h3>Order Summary</h3>
                 {cart.map(item => (
-                  <div key={item.id} className="summary-item">
+                  <div key={item._id} className="summary-item">
                     <span>{item.name} x {item.quantity}</span>
                     <span>Rs. {item.price * item.quantity}</span>
                   </div>
@@ -861,8 +867,8 @@ function App() {
             
             <div className="tracking-content">
               <div className="order-info">
-                <h3>Order #{orderStatus.order_id}</h3>
-                <p>Estimated delivery: {orderStatus.estimated_delivery}</p>
+                <h3>Order #{orderStatus.orderNumber}</h3>
+                <p>Estimated delivery: {orderStatus.estimatedDeliveryTime}</p>
               </div>
 
               <div className="tracking-steps">
@@ -928,9 +934,9 @@ function App() {
 
               <div className="order-details">
                 <h3>Order Details</h3>
-                <p><strong>Restaurant:</strong> {orderStatus.items[0]?.restaurant_name || 'Restaurant'}</p>
-                <p><strong>Total:</strong> Rs. {orderStatus.grand_total}</p>
-                <p><strong>Payment:</strong> {orderStatus.payment_method}</p>
+                <p><strong>Restaurant:</strong> {selectedRestaurant?.name || 'Restaurant'}</p>
+                <p><strong>Total:</strong> Rs. {orderStatus.pricing?.total || 'N/A'}</p>
+                <p><strong>Payment:</strong> {orderStatus.paymentMethod}</p>
               </div>
             </div>
           </div>
