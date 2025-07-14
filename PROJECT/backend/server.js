@@ -480,7 +480,132 @@ app.get('/api/areas/:city', async (req, res) => {
         });
     }
 });
+// =============== ANALYTICS ROUTES ===============
+// Get dashboard analytics
+app.get('/api/analytics/dashboard', async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const thisWeek = new Date();
+        thisWeek.setDate(thisWeek.getDate() - 7);
+        
+        const thisMonth = new Date();
+        thisMonth.setDate(1);
+        thisMonth.setHours(0, 0, 0, 0);
 
+        // Get basic counts
+        const totalRestaurants = await Restaurant.countDocuments({ isActive: true });
+        const totalMenuItems = await MenuItem.countDocuments({ isAvailable: true });
+        const totalUsers = await User.countDocuments({ role: 'user' });
+        
+        // Get order statistics
+        const totalOrders = await Order.countDocuments();
+        const ordersToday = await Order.countDocuments({ 
+            createdAt: { $gte: today } 
+        });
+        const ordersThisWeek = await Order.countDocuments({ 
+            createdAt: { $gte: thisWeek } 
+        });
+        const ordersThisMonth = await Order.countDocuments({ 
+            createdAt: { $gte: thisMonth } 
+        });
+
+        // Get revenue statistics
+        const totalRevenue = await Order.aggregate([
+            { $group: { _id: null, total: { $sum: "$pricing.total" } } }
+        ]);
+        
+        const revenueToday = await Order.aggregate([
+            { $match: { createdAt: { $gte: today } } },
+            { $group: { _id: null, total: { $sum: "$pricing.total" } } }
+        ]);
+
+        const revenueThisMonth = await Order.aggregate([
+            { $match: { createdAt: { $gte: thisMonth } } },
+            { $group: { _id: null, total: { $sum: "$pricing.total" } } }
+        ]);
+
+        // Get order status distribution
+        const orderStatusDistribution = await Order.aggregate([
+            { $group: { _id: "$orderStatus", count: { $sum: 1 } } }
+        ]);
+
+        // Get popular restaurants
+        const popularRestaurants = await Order.aggregate([
+            { $group: { _id: "$restaurant", orderCount: { $sum: 1 } } },
+            { $sort: { orderCount: -1 } },
+            { $limit: 5 },
+            { $lookup: { from: "restaurants", localField: "_id", foreignField: "_id", as: "restaurant" } },
+            { $unwind: "$restaurant" },
+            { $project: { name: "$restaurant.name", orderCount: 1 } }
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                overview: {
+                    totalRestaurants,
+                    totalMenuItems,
+                    totalUsers,
+                    totalOrders,
+                    totalRevenue: totalRevenue[0]?.total || 0
+                },
+                orders: {
+                    today: ordersToday,
+                    thisWeek: ordersThisWeek,
+                    thisMonth: ordersThisMonth,
+                    total: totalOrders
+                },
+                revenue: {
+                    today: revenueToday[0]?.total || 0,
+                    thisMonth: revenueThisMonth[0]?.total || 0,
+                    total: totalRevenue[0]?.total || 0
+                },
+                orderStatusDistribution,
+                popularRestaurants
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching analytics',
+            error: error.message
+        });
+    }
+});
+
+// Get sales trends (last 7 days)
+app.get('/api/analytics/sales-trends', async (req, res) => {
+    try {
+        const salesTrends = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    orders: { $sum: 1 },
+                    revenue: { $sum: "$pricing.total" }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        res.json({
+            success: true,
+            data: salesTrends
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching sales trends',
+            error: error.message
+        });
+    }
+});
 // =============== ERROR HANDLING ===============
 app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
