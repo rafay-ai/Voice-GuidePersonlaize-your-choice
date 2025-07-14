@@ -1,8 +1,8 @@
-// frontend/src/App.js - Fixed ESLint Warnings
+// frontend/src/App.js - COMPLETE ENHANCED VERSION
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
-// Enhanced onboarding questions with options
+// ===== 1. ONBOARDING QUESTIONS =====
 const onboardingQuestions = [
   {
     id: 1,
@@ -41,40 +41,218 @@ const onboardingQuestions = [
   }
 ];
 
-// Smart recommendation engine
-const smartRecommendationEngine = {
-  getRecommendations: (userPrefs, restaurants) => {
-    if (!userPrefs || restaurants.length === 0) return [];
+// ===== 2. USER DATA MANAGEMENT FUNCTIONS =====
+const getUserData = (userId) => {
+  const userData = localStorage.getItem(`userData_${userId}`);
+  if (userData) {
+    return JSON.parse(userData);
+  }
+  
+  return {
+    preferences: {},
+    orderHistory: [],
+    favorites: [],
+    ratings: {},
+    behaviorData: {
+      mostOrderedCuisine: null,
+      averageOrderValue: 0,
+      preferredOrderTime: null,
+      totalOrders: 0,
+      totalSpent: 0
+    },
+    feedback: []
+  };
+};
+
+const saveUserData = (userId, userData) => {
+  localStorage.setItem(`userData_${userId}`, JSON.stringify(userData));
+};
+
+const updateUserPreferences = (userId, newPreferences) => {
+  const userData = getUserData(userId);
+  userData.preferences = { ...userData.preferences, ...newPreferences };
+  saveUserData(userId, userData);
+};
+
+const addToUserOrderHistory = (userId, orderData, restaurants) => {
+  const userData = getUserData(userId);
+  
+  const orderEntry = {
+    id: orderData.id || `order_${Date.now()}`,
+    restaurantId: orderData.restaurantId,
+    restaurantName: orderData.restaurantName,
+    items: orderData.items,
+    total: orderData.total,
+    date: new Date().toISOString(),
+    status: orderData.status || 'completed',
+    rating: null,
+    feedback: null
+  };
+  
+  userData.orderHistory.unshift(orderEntry);
+  
+  // Update behavior data
+  userData.behaviorData.totalOrders += 1;
+  userData.behaviorData.totalSpent += orderData.total;
+  userData.behaviorData.averageOrderValue = userData.behaviorData.totalSpent / userData.behaviorData.totalOrders;
+  
+  // Track most ordered cuisine
+  const cuisineCount = {};
+  userData.orderHistory.forEach(order => {
+    const restaurant = restaurants.find(r => r._id === order.restaurantId);
+    if (restaurant && restaurant.cuisine) {
+      restaurant.cuisine.forEach(cuisine => {
+        cuisineCount[cuisine] = (cuisineCount[cuisine] || 0) + 1;
+      });
+    }
+  });
+  
+  const mostOrdered = Object.entries(cuisineCount).sort((a, b) => b[1] - a[1])[0];
+  if (mostOrdered) {
+    userData.behaviorData.mostOrderedCuisine = mostOrdered[0];
+  }
+  
+  saveUserData(userId, userData);
+  return orderEntry;
+};
+
+const addUserRating = (userId, orderId, rating, feedback = '') => {
+  const userData = getUserData(userId);
+  
+  const orderIndex = userData.orderHistory.findIndex(order => order.id === orderId);
+  if (orderIndex !== -1) {
+    userData.orderHistory[orderIndex].rating = rating;
+    userData.orderHistory[orderIndex].feedback = feedback;
+  }
+  
+  userData.ratings[orderId] = {
+    rating,
+    feedback,
+    date: new Date().toISOString()
+  };
+  
+  userData.feedback.push({
+    orderId,
+    rating,
+    feedback,
+    date: new Date().toISOString(),
+    restaurantId: userData.orderHistory[orderIndex]?.restaurantId
+  });
+  
+  saveUserData(userId, userData);
+};
+
+const addToUserFavorites = (userId, restaurantId) => {
+  const userData = getUserData(userId);
+  if (!userData.favorites.includes(restaurantId)) {
+    userData.favorites.push(restaurantId);
+    saveUserData(userId, userData);
+  }
+};
+
+const removeFromUserFavorites = (userId, restaurantId) => {
+  const userData = getUserData(userId);
+  userData.favorites = userData.favorites.filter(id => id !== restaurantId);
+  saveUserData(userId, userData);
+};
+
+// ===== 3. HELPER FUNCTION =====
+const getPriceRangeDisplay = (priceRange) => {
+  if (!priceRange) return 'Price not specified';
+  
+  const count = (priceRange.match(/₨|Rs/g) || []).length;
+  
+  switch(count) {
+    case 1: return 'Budget';
+    case 2: return 'Moderate';
+    case 3: return 'Premium';
+    case 4: return 'Luxury';
+    default: return 'Moderate';
+  }
+};
+
+// ===== 4. ENHANCED RECOMMENDATION ENGINE =====
+const enhancedRecommendationEngineArrow = {
+  getPersonalizedRecommendations: (userId, restaurants) => {
+    const userData = getUserData(userId);
+    const preferences = userData.preferences;
+    const behaviorData = userData.behaviorData;
+    const orderHistory = userData.orderHistory;
+    
+    if (restaurants.length === 0) return [];
     
     let scored = restaurants.map(restaurant => {
       let score = 0;
       
-      // Cuisine preference matching
-      if (userPrefs.cuisine && restaurant.cuisine) {
+      // Base scoring from preferences
+      if (preferences.cuisine && restaurant.cuisine) {
         const cuisineMatch = restaurant.cuisine.some(c => 
-          userPrefs.cuisine.toLowerCase().includes(c.toLowerCase()) ||
-          c.toLowerCase().includes(userPrefs.cuisine.toLowerCase())
+          preferences.cuisine.toLowerCase().includes(c.toLowerCase()) ||
+          c.toLowerCase().includes(preferences.cuisine.toLowerCase())
         );
         if (cuisineMatch) score += 50;
       }
       
-      // Budget matching
-      if (userPrefs.budget) {
-        const budgetScore = smartRecommendationEngine.getBudgetScore(userPrefs.budget, restaurant.priceRange);
+      // Behavior-based scoring
+      if (behaviorData.mostOrderedCuisine && restaurant.cuisine) {
+        const favoriteMatch = restaurant.cuisine.some(c => 
+          c.toLowerCase().includes(behaviorData.mostOrderedCuisine.toLowerCase())
+        );
+        if (favoriteMatch) score += 40;
+      }
+      
+      // Budget compatibility - FIXED: direct function call
+      if (preferences.budget) {
+        const budgetScore = enhancedRecommendationEngineArrow.getBudgetScore(preferences.budget, restaurant.priceRange);
         score += budgetScore;
+      }
+      
+      // Order history boost
+      const previousOrders = orderHistory.filter(order => order.restaurantId === restaurant._id);
+      if (previousOrders.length > 0) {
+        const avgRating = previousOrders
+          .filter(order => order.rating)
+          .reduce((sum, order) => sum + order.rating, 0) / previousOrders.filter(order => order.rating).length;
+        
+        if (avgRating >= 4) score += 35;
+        else if (avgRating >= 3) score += 20;
+        else if (avgRating < 3) score -= 20;
+      }
+      
+      // Favorites boost
+      if (userData.favorites.includes(restaurant._id)) {
+        score += 60;
       }
       
       // Rating boost
       score += (restaurant.rating || 0) * 5;
       
-      // Popular restaurants boost
-      if (restaurant.name.toLowerCase().includes('student biryani')) score += 20;
-      if (restaurant.name.toLowerCase().includes('kfc')) score += 15;
-      
-      return { ...restaurant, score };
+      return { ...restaurant, score, personalizedReason: enhancedRecommendationEngineArrow.getRecommendationReason(restaurant, userData) };
     });
     
-    return scored.sort((a, b) => b.score - a.score).slice(0, 3);
+    return scored.sort((a, b) => b.score - a.score).slice(0, 5);
+  },
+  
+  getRecommendationReason: (restaurant, userData) => {
+    if (userData.favorites.includes(restaurant._id)) {
+      return "❤️ Your favorite";
+    }
+    
+    const previousOrders = userData.orderHistory.filter(order => order.restaurantId === restaurant._id);
+    if (previousOrders.length > 0) {
+      const avgRating = previousOrders
+        .filter(order => order.rating)
+        .reduce((sum, order) => sum + order.rating, 0) / previousOrders.filter(order => order.rating).length;
+      
+      if (avgRating >= 4) return "⭐ You loved this place";
+      else if (avgRating >= 3) return "👍 You enjoyed this before";
+    }
+    
+    if (userData.behaviorData.mostOrderedCuisine && restaurant.cuisine?.includes(userData.behaviorData.mostOrderedCuisine)) {
+      return `🍽️ Your favorite: ${userData.behaviorData.mostOrderedCuisine}`;
+    }
+    
+    return "🎯 Recommended for you";
   },
   
   getBudgetScore: (userBudget, restaurantPriceRange) => {
@@ -93,32 +271,28 @@ const smartRecommendationEngine = {
     };
     
     const userLevel = budgetMap[userBudget] || 2;
-    const restLevel = priceMap[restaurantPriceRange] || 2;
+    const restLevel = priceMap[getPriceRangeDisplay(restaurantPriceRange)] || 2;
     
     return Math.max(0, 30 - Math.abs(userLevel - restLevel) * 10);
   }
 };
-
-// Smart chatbot responses
+// ===== 5. CHATBOT RESPONSES =====
 const chatbotResponses = {
   greetings: [
     "Hello! I'm your AI food assistant. How can I help you today? 🍕",
     "Hi there! Ready to find some delicious food? 😋",
     "Welcome! I'm here to help you discover amazing restaurants!"
   ],
-  
   recommendations: [
     "Based on your preferences, here are my top picks:",
     "I think you'll love these restaurants:",
     "Perfect matches for your taste:"
   ],
-  
   orderHelp: [
     "I can help you place an order! What are you craving?",
     "Let's get you some food! What sounds good today?",
     "Ready to order? Tell me what you're in the mood for!"
   ],
-  
   fallback: [
     "I'm not sure about that, but I can help you find great food! What are you looking for?",
     "Let me help you with something food-related! What can I do for you?",
@@ -126,8 +300,9 @@ const chatbotResponses = {
   ]
 };
 
+// ===== 6. MAIN APP COMPONENT =====
 function App() {
-  // All your existing state variables
+  // ===== ALL STATE VARIABLES =====
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [menu, setMenu] = useState([]);
@@ -183,12 +358,17 @@ function App() {
     }
   ]);
 
-  // Enhanced chatbot state
+  // NEW STATE VARIABLES FOR ENHANCED USER SYSTEM
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0);
   const [userPreferences, setUserPreferences] = useState({});
   const [isTyping, setIsTyping] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [selectedOrderForRating, setSelectedOrderForRating] = useState(null);
+  const [currentRating, setCurrentRating] = useState(0);
+  const [currentFeedback, setCurrentFeedback] = useState('');
 
-  // Fixed fetchAnalytics with useCallback to prevent dependency warning
+  // ===== ANALYTICS FUNCTION =====
   const fetchAnalytics = useCallback(() => {
     setAnalyticsLoading(true);
     
@@ -241,7 +421,7 @@ function App() {
     }, 1000);
   }, [allOrders]);
 
-  // All existing useEffect hooks
+  // ===== useEffect HOOKS =====
   useEffect(() => {
     fetchRestaurants();
   }, []);
@@ -256,22 +436,19 @@ function App() {
   useEffect(() => {
     console.log('Current user changed:', currentUser);
     if (currentUser && !currentUser.isAdmin) {
-      const userPrefs = localStorage.getItem(`userPrefs_${currentUser.id}`);
-      console.log('User preferences:', userPrefs);
+      const userData = getUserData(currentUser.id);
       
-      if (!userPrefs || currentUser.isNewUser) {
+      if (Object.keys(userData.preferences).length === 0 || currentUser.isNewUser) {
         console.log('New user detected, starting onboarding...');
         setIsNewUser(true);
         setShowChat(true);
         startOnboarding();
       } else {
-        // Load existing preferences
-        setUserPreferences(JSON.parse(userPrefs));
+        setUserPreferences(userData.preferences);
       }
     }
   }, [currentUser]);
 
-  // Fixed useEffect with proper dependencies
   useEffect(() => {
     if (currentUser?.isAdmin) {
       fetchAnalytics();
@@ -280,7 +457,7 @@ function App() {
     }
   }, [currentUser, fetchAnalytics]);
 
-  // All existing functions
+  // ===== API FUNCTIONS =====
   const fetchRestaurants = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/restaurants');
@@ -313,234 +490,7 @@ function App() {
     }
   };
 
-  // Enhanced chatbot functions
-  const startOnboarding = () => {
-    setCurrentOnboardingStep(0);
-    setUserPreferences({});
-    setMessages([{
-      role: 'bot',
-      content: `Welcome to Pakistani Food Delivery, ${currentUser?.name || 'there'}! 🎉\n\nI'm your AI food assistant and I'll help you discover the perfect meals based on your preferences. Let's get to know your taste!`,
-      isOnboarding: true,
-      timestamp: new Date().toLocaleTimeString()
-    }]);
-    
-    setTimeout(() => {
-      showNextOnboardingQuestion();
-    }, 1500);
-  };
-
-  const showNextOnboardingQuestion = () => {
-  const question = onboardingQuestions[currentOnboardingStep];
-  setIsTyping(true);
-  
-  setTimeout(() => {
-    setIsTyping(false);
-    setMessages(prev => [...prev, {
-      role: 'bot',
-      content: question.question,
-      isOnboarding: true,
-      questionData: question,
-      timestamp: new Date().toLocaleTimeString()
-    }]);
-  }, 1000);
-};
-
-  const handleOptionSelect = (option, questionKey) => {
-  // Add user response
-  setMessages(prev => [...prev, {
-    role: 'user',
-    content: option,
-    timestamp: new Date().toLocaleTimeString()
-  }]);
-
-  // Update preferences
-  const newPrefs = { ...userPreferences, [questionKey]: option };
-  setUserPreferences(newPrefs);
-  
-  // Move to next question
-  const nextStep = currentOnboardingStep + 1;
-  setCurrentOnboardingStep(nextStep);
-  
-  // Continue with next question or complete onboarding
-  setTimeout(() => {
-    if (nextStep < onboardingQuestions.length) {
-      showNextOnboardingQuestion();
-    } else {
-      completeOnboarding();
-    }
-  }, 500);
-};
-  const completeOnboarding = () => {
-  // Save preferences
-  localStorage.setItem(`userPrefs_${currentUser.id}`, JSON.stringify(userPreferences));
-  setIsNewUser(false);
-  
-  // Show completion message with recommendations
-  setIsTyping(true);
-  setTimeout(() => {
-    setIsTyping(false);
-    const recommendations = smartRecommendationEngine.getRecommendations(userPreferences, restaurants);
-    
-    setMessages(prev => [...prev, {
-      role: 'bot',
-      content: `Perfect! I've learned your preferences. 🎯\n\nBased on what you told me, here are my top recommendations for you:`,
-      recommendations: recommendations,
-      isOnboarding: false,
-      timestamp: new Date().toLocaleTimeString()
-    }]);
-  }, 1000);
-};
-
-  const sendMessage = async () => {
-    if (!inputMessage.trim()) return;
-
-    const userMsg = {
-      role: 'user',
-      content: inputMessage,
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
-    setInputMessage('');
-    setIsTyping(true);
-
-    // Smart response logic
-    setTimeout(() => {
-      setIsTyping(false);
-      const response = generateSmartResponse(inputMessage.toLowerCase());
-      setMessages(prev => [...prev, response]);
-    }, 1500);
-  };
-
-  const generateSmartResponse = (userInput) => {
-  let response = {
-    role: 'bot',
-    timestamp: new Date().toLocaleTimeString()
-  };
-
-  // Enhanced intent detection with more keywords
-  if (userInput.includes('recommend') || userInput.includes('suggest') || userInput.includes('what should')) {
-    const recommendations = smartRecommendationEngine.getRecommendations(userPreferences, restaurants);
-    response.content = chatbotResponses.recommendations[Math.floor(Math.random() * chatbotResponses.recommendations.length)];
-    response.recommendations = recommendations.length > 0 ? recommendations : restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('popular') || userInput.includes('trending') || userInput.includes('best') || userInput.includes('top')) {
-    // Show popular restaurants based on ratings and sample data
-    const popularRestaurants = restaurants
-      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-      .slice(0, 3);
-    
-    response.content = "Here are our most popular restaurants right now! 🔥";
-    response.recommendations = popularRestaurants;
-  }
-  else if (userInput.includes('order') || userInput.includes('buy') || userInput.includes('want') || userInput.includes('get')) {
-    response.content = chatbotResponses.orderHelp[Math.floor(Math.random() * chatbotResponses.orderHelp.length)];
-    // Show top rated restaurants for ordering
-    response.recommendations = restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('hello') || userInput.includes('hi') || userInput.includes('hey')) {
-    response.content = chatbotResponses.greetings[Math.floor(Math.random() * chatbotResponses.greetings.length)];
-    // Show quick action buttons after greeting
-    response.quickReplies = ["Show recommendations", "Popular restaurants", "Budget options"];
-  }
-  else if (userInput.includes('budget') || userInput.includes('cheap') || userInput.includes('affordable') || userInput.includes('inexpensive')) {
-    // Filter restaurants by budget-friendly options
-    const budgetRestaurants = restaurants.filter(r => {
-      const priceCategory = getPriceRangeDisplay(r.priceRange);
-      return priceCategory === 'Budget' || priceCategory === 'Moderate';
-    });
-    
-    response.content = "Great! Here are some budget-friendly options for you: 💰";
-    response.recommendations = budgetRestaurants.slice(0, 3);
-    response.quickReplies = ["Under Rs. 500", "Rs. 500-1000"];
-  }
-  else if (userInput.includes('spicy') || userInput.includes('mild') || userInput.includes('hot')) {
-    response.content = "Looking for something with the right spice level! How spicy do you like it? 🌶️";
-    response.quickReplies = ["Mild", "Medium", "Spicy", "Very Spicy"];
-    // Show restaurants known for spicy food
-    const spicyRestaurants = restaurants.filter(r => 
-      r.cuisine && r.cuisine.some(c => 
-        c.toLowerCase().includes('pakistani') || 
-        c.toLowerCase().includes('chinese') ||
-        c.toLowerCase().includes('bbq')
-      )
-    );
-    response.recommendations = spicyRestaurants.slice(0, 3);
-  }
-  else if (userInput.includes('vegetarian') || userInput.includes('vegan') || userInput.includes('veg')) {
-    const vegRestaurants = restaurants.filter(r => 
-      r.cuisine && r.cuisine.some(c => 
-        c.toLowerCase().includes('vegetarian') || 
-        c.toLowerCase().includes('healthy') ||
-        c.toLowerCase().includes('italian')
-      )
-    );
-    response.content = "Perfect! Here are some vegetarian-friendly options: 🥗";
-    response.recommendations = vegRestaurants.length > 0 ? vegRestaurants.slice(0, 3) : restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('fast food') || userInput.includes('quick') || userInput.includes('fast')) {
-    const fastFoodRestaurants = restaurants.filter(r => 
-      r.cuisine && r.cuisine.some(c => 
-        c.toLowerCase().includes('fast food') || 
-        c.toLowerCase().includes('american') ||
-        r.name.toLowerCase().includes('kfc') ||
-        r.name.toLowerCase().includes('subway')
-      )
-    );
-    response.content = "Here are some great fast food options for a quick bite! ⚡";
-    response.recommendations = fastFoodRestaurants.length > 0 ? fastFoodRestaurants.slice(0, 3) : restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('pakistani') || userInput.includes('biryani') || userInput.includes('karahi')) {
-    const pakistaniRestaurants = restaurants.filter(r => 
-      r.cuisine && r.cuisine.some(c => 
-        c.toLowerCase().includes('pakistani')
-      ) || r.name.toLowerCase().includes('biryani')
-    );
-    response.content = "Authentic Pakistani cuisine coming right up! 🇵🇰";
-    response.recommendations = pakistaniRestaurants.length > 0 ? pakistaniRestaurants.slice(0, 3) : restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('chinese') || userInput.includes('noodles') || userInput.includes('fried rice')) {
-    const chineseRestaurants = restaurants.filter(r => 
-      r.cuisine && r.cuisine.some(c => 
-        c.toLowerCase().includes('chinese')
-      )
-    );
-    response.content = "Delicious Chinese food options for you! 🥢";
-    response.recommendations = chineseRestaurants.length > 0 ? chineseRestaurants.slice(0, 3) : restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('pizza') || userInput.includes('italian')) {
-    const italianRestaurants = restaurants.filter(r => 
-      r.cuisine && r.cuisine.some(c => 
-        c.toLowerCase().includes('italian') ||
-        c.toLowerCase().includes('pizza')
-      ) || r.name.toLowerCase().includes('pizza')
-    );
-    response.content = "Great choice! Here are the best pizza places: 🍕";
-    response.recommendations = italianRestaurants.length > 0 ? italianRestaurants.slice(0, 3) : restaurants.slice(0, 3);
-  }
-  else if (userInput.includes('change preferences') || userInput.includes('reset') || userInput.includes('update preferences')) {
-    response.content = "I can help you update your preferences! Would you like to go through the setup again?";
-    response.quickReplies = ["Yes, update preferences", "Show current preferences", "No, keep current"];
-  }
-  else if (userInput.includes('help') || userInput.includes('what can you do')) {
-    response.content = "I can help you with many things! Here's what I can do:\n\n🎯 Find personalized recommendations\n🔥 Show popular restaurants\n💰 Filter by budget\n🌶️ Match spice preferences\n🍕 Find specific cuisines\n📋 Help place orders\n\nWhat would you like to try?";
-    response.quickReplies = ["Show recommendations", "Popular restaurants", "Budget options", "Spicy food"];
-  }
-  else {
-    // Enhanced fallback with helpful suggestions
-    response.content = "I'd love to help you find great food! Here are some things you can try:";
-    response.quickReplies = ["Show recommendations", "Popular restaurants", "Budget options", "Spicy food", "Fast food", "Pakistani food"];
-  }
-
-  return response;
-};
-
-  const handleQuickReply = (reply) => {
-    setInputMessage(reply);
-    sendMessage();
-  };
-
-  // All other existing functions remain the same
+  // ===== RESTAURANT AND CART FUNCTIONS =====
   const selectRestaurant = (restaurant) => {
     setSelectedRestaurant(restaurant);
     fetchMenu(restaurant._id);
@@ -570,20 +520,7 @@ function App() {
     return { subtotal, deliveryFee, total: subtotal + deliveryFee };
   };
 
-  const getPriceRangeDisplay = (priceRange) => {
-    if (!priceRange) return 'Price not specified';
-    
-    const count = (priceRange.match(/₨|Rs/g) || []).length;
-    
-    switch(count) {
-      case 1: return 'Budget';
-      case 2: return 'Moderate';
-      case 3: return 'Premium';
-      case 4: return 'Luxury';
-      default: return 'Moderate';
-    }
-  };
-
+  // ===== AUTH FUNCTIONS =====
   const handleLogin = async (e) => {
     e.preventDefault();
     
@@ -652,6 +589,205 @@ function App() {
     setOrderStatus(null);
   };
 
+  // ===== ENHANCED CHATBOT FUNCTIONS =====
+  const startOnboarding = () => {
+    setCurrentOnboardingStep(0);
+    setUserPreferences({});
+    setMessages([{
+      role: 'bot',
+      content: `Welcome to Pakistani Food Delivery, ${currentUser?.name || 'there'}! 🎉\n\nI'm your AI food assistant and I'll help you discover the perfect meals based on your preferences. Let's get to know your taste!`,
+      isOnboarding: true,
+      timestamp: new Date().toLocaleTimeString()
+    }]);
+    
+    setTimeout(() => {
+      showNextOnboardingQuestion();
+    }, 1500);
+  };
+
+  const showNextOnboardingQuestion = () => {
+    const question = onboardingQuestions[currentOnboardingStep];
+    setIsTyping(true);
+    
+    setTimeout(() => {
+      setIsTyping(false);
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        content: question.question,
+        isOnboarding: true,
+        questionData: question,
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+    }, 1000);
+  };
+
+  const handleOptionSelect = (option, questionKey) => {
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: option,
+      timestamp: new Date().toLocaleTimeString()
+    }]);
+
+    const newPrefs = { ...userPreferences, [questionKey]: option };
+    setUserPreferences(newPrefs);
+    
+    const nextStep = currentOnboardingStep + 1;
+    setCurrentOnboardingStep(nextStep);
+    
+    setTimeout(() => {
+      if (nextStep < onboardingQuestions.length) {
+        showNextOnboardingQuestion();
+      } else {
+        completeOnboarding(newPrefs);
+      }
+    }, 500);
+  };
+
+  const completeOnboarding = (finalPreferences = userPreferences) => {
+    updateUserPreferences(currentUser.id, finalPreferences);
+    setIsNewUser(false);
+    
+    setIsTyping(true);
+    setTimeout(() => {
+      setIsTyping(false);
+      const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(currentUser.id, restaurants);
+      
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        content: `Perfect! I've learned your preferences and created your personal profile. 🎯\n\nBased on your taste, here are my top recommendations:`,
+        recommendations: recommendations,
+        isOnboarding: false,
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+    }, 1000);
+  };
+
+  const generatePersonalizedResponse = (userInput, userId) => {
+    const userData = getUserData(userId);
+    let response = {
+      role: 'bot',
+      timestamp: new Date().toLocaleTimeString()
+    };
+
+    if (userInput.includes('recommend') || userInput.includes('suggest')) {
+      const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants);
+      
+      if (userData.behaviorData.totalOrders > 0) {
+        response.content = `Based on your ${userData.behaviorData.totalOrders} previous orders and preferences, here are my top picks for you:`;
+      } else {
+        response.content = "Based on your preferences, here are my recommendations:";
+      }
+      response.recommendations = recommendations;
+    }
+    else if (userInput.includes('order history') || userInput.includes('my orders')) {
+      if (userData.orderHistory.length > 0) {
+        response.content = `You've placed ${userData.orderHistory.length} orders. Here are your recent favorites:`;
+        const recentFavorites = userData.orderHistory
+          .filter(order => order.rating >= 4)
+          .slice(0, 3)
+          .map(order => restaurants.find(r => r._id === order.restaurantId))
+          .filter(Boolean);
+        response.recommendations = recentFavorites;
+      } else {
+        response.content = "You haven't placed any orders yet. Let me recommend some great restaurants!";
+        response.recommendations = restaurants.slice(0, 3);
+      }
+    }
+    else if (userInput.includes('favorites')) {
+      if (userData.favorites.length > 0) {
+        response.content = "Here are your favorite restaurants:";
+        const favoriteRestaurants = userData.favorites
+          .map(id => restaurants.find(r => r._id === id))
+          .filter(Boolean);
+        response.recommendations = favoriteRestaurants;
+      } else {
+        response.content = "You haven't added any favorites yet. Try some restaurants and add them to your favorites!";
+        response.quickReplies = ["Show recommendations", "Popular restaurants"];
+      }
+    }
+    else if (userInput.includes('stats') || userInput.includes('my data')) {
+      const stats = userData.behaviorData;
+      response.content = `📊 Your Food Stats:\n\n🛒 Total Orders: ${stats.totalOrders}\n💰 Total Spent: Rs. ${stats.totalSpent}\n📈 Average Order: Rs. ${Math.round(stats.averageOrderValue)}\n🍽️ Favorite Cuisine: ${stats.mostOrderedCuisine || 'Not enough data'}`;
+    }
+    else if (userInput.includes('popular')) {
+      const popularRestaurants = restaurants
+        .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+        .slice(0, 3);
+      
+      response.content = "Here are our most popular restaurants right now! 🔥";
+      response.recommendations = popularRestaurants;
+    }
+    else {
+      response.content = chatbotResponses.fallback[Math.floor(Math.random() * chatbotResponses.fallback.length)];
+      response.quickReplies = ["Show recommendations", "Popular restaurants", "My orders", "My favorites"];
+    }
+
+    return response;
+  };
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim()) return;
+
+    const userMsg = {
+      role: 'user',
+      content: inputMessage,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    setMessages(prev => [...prev, userMsg]);
+    setInputMessage('');
+    setIsTyping(true);
+
+    setTimeout(() => {
+      setIsTyping(false);
+      const response = generatePersonalizedResponse(inputMessage.toLowerCase(), currentUser.id);
+      setMessages(prev => [...prev, response]);
+    }, 1500);
+  };
+
+  const handleQuickReply = (reply) => {
+    setInputMessage(reply);
+    sendMessage();
+  };
+
+  // ===== USER PROFILE FUNCTIONS =====
+  const handleRateOrder = (orderId) => {
+    const userData = getUserData(currentUser.id);
+    const order = userData.orderHistory.find(o => o.id === orderId);
+    setSelectedOrderForRating(order);
+    setCurrentRating(order.rating || 0);
+    setCurrentFeedback(order.feedback || '');
+    setShowRatingModal(true);
+  };
+
+  const submitRating = () => {
+    if (selectedOrderForRating && currentRating > 0) {
+      addUserRating(currentUser.id, selectedOrderForRating.id, currentRating, currentFeedback);
+      setShowRatingModal(false);
+      setSelectedOrderForRating(null);
+      setCurrentRating(0);
+      setCurrentFeedback('');
+      alert('Thank you for your feedback!');
+    }
+  };
+
+  const toggleFavorite = (restaurantId) => {
+    if (!currentUser) {
+      alert('Please login to add favorites');
+      return;
+    }
+    
+    const userData = getUserData(currentUser.id);
+    if (userData.favorites.includes(restaurantId)) {
+      removeFromUserFavorites(currentUser.id, restaurantId);
+      alert('Removed from favorites');
+    } else {
+      addToUserFavorites(currentUser.id, restaurantId);
+      alert('Added to favorites!');
+    }
+  };
+
+  // ===== ENHANCED PLACE ORDER FUNCTION =====
   const placeOrder = async () => {
     if (!currentUser) {
       alert('Please login to place an order');
@@ -673,7 +809,7 @@ function App() {
     }
 
     const orderData = {
-      userId: "686fabb1c1fb439f2e230c81",
+      userId: currentUser.id,
       restaurantId: restaurantId,
       items: cart.map(item => ({
         menuItemId: item._id,
@@ -703,6 +839,20 @@ function App() {
       console.log('Order response:', data);
       
       if (data.success) {
+        // Save to user's order history
+        addToUserOrderHistory(currentUser.id, {
+          id: data.order._id || `order_${Date.now()}`,
+          restaurantId: selectedRestaurant._id,
+          restaurantName: selectedRestaurant.name,
+          items: cart.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          total: calculateTotal().total,
+          status: 'confirmed'
+        }, restaurants);
+        
         localStorage.setItem(`address_${currentUser.id}`, JSON.stringify(deliveryAddress));
         setOrderStatus(data.order);
         setCart([]);
@@ -723,6 +873,7 @@ function App() {
     }
   };
 
+  // ===== RENDER COMPONENT =====
   return (
     <div className="App">
       {/* Header */}
@@ -735,6 +886,11 @@ function App() {
               {currentUser.isAdmin && (
                 <button onClick={() => setShowAdminDashboard(!showAdminDashboard)} className="admin-button">
                   {showAdminDashboard ? '🏠 Customer View' : '📊 Admin Dashboard'}
+                </button>
+              )}
+              {currentUser && !currentUser.isAdmin && (
+                <button onClick={() => setShowUserProfile(true)} className="profile-button">
+                  📊 My Profile
                 </button>
               )}
               <button onClick={handleLogout} className="logout-button">Logout</button>
@@ -759,7 +915,7 @@ function App() {
       </header>
 
       <div className="main-container">
-        {/* Admin Dashboard and Regular Content - same as before */}
+        {/* Admin Dashboard */}
         {showAdminDashboard && currentUser?.isAdmin ? (
           <div className="admin-dashboard">
             <div className="dashboard-header">
@@ -933,6 +1089,7 @@ function App() {
                           key={restaurant._id} 
                           className="restaurant-card"
                           onClick={() => selectRestaurant(restaurant)}
+                          style={{ position: 'relative' }}
                         >
                           <h3>{restaurant.name}</h3>
                           <p className="cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Cuisine not specified'}</p>
@@ -942,6 +1099,18 @@ function App() {
                             <span>🚚 {restaurant.deliveryTime}</span>
                           </div>
                           <p className="min-order">Min order: Rs. {restaurant.minimumOrder}</p>
+                          
+                          {currentUser && !currentUser.isAdmin && (
+                            <button
+                              className={`favorite-heart ${getUserData(currentUser.id).favorites.includes(restaurant._id) ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(restaurant._id);
+                              }}
+                            >
+                              ❤️
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1040,7 +1209,7 @@ function App() {
                   <div className="feature">💰 Filter by budget</div>
                   <div className="feature">🌶️ Match spice preferences</div>
                 </div>
-                {currentUser && !localStorage.getItem(`userPrefs_${currentUser.id}`) && (
+                {currentUser && Object.keys(getUserData(currentUser.id).preferences).length === 0 && (
                   <button 
                     className="setup-preferences-btn"
                     onClick={startOnboarding}
@@ -1113,6 +1282,11 @@ function App() {
                             {Math.round(restaurant.score)}% match
                           </div>
                         )}
+                        {restaurant.personalizedReason && (
+                          <div className="recommendation-reason">
+                            {restaurant.personalizedReason}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1141,8 +1315,11 @@ function App() {
                 <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
                   🔥 Popular
                 </button>
-                <button onClick={() => handleQuickReply("Budget options")} className="suggestion-chip">
-                  💰 Budget
+                <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
+                  📋 My Orders
+                </button>
+                <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
+                  ❤️ Favorites
                 </button>
               </div>
             )}
@@ -1168,7 +1345,226 @@ function App() {
         </div>
       )}
 
-      {/* All existing modals remain the same */}
+      {/* User Profile Modal */}
+      {showUserProfile && currentUser && (
+        <div className="modal-overlay" onClick={() => setShowUserProfile(false)}>
+          <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>👤 My Profile</h2>
+              <button onClick={() => setShowUserProfile(false)} className="close-button">✖</button>
+            </div>
+            
+            {(() => {
+              const userData = getUserData(currentUser.id);
+              return (
+                <div className="profile-content">
+                  {/* User Stats */}
+                  <div className="profile-section">
+                    <h3>📊 Your Food Journey</h3>
+                    <div className="stats-grid">
+                      <div className="stat-item">
+                        <span className="stat-number">{userData.behaviorData.totalOrders}</span>
+                        <span className="stat-label">Total Orders</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-number">Rs. {userData.behaviorData.totalSpent}</span>
+                        <span className="stat-label">Total Spent</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-number">Rs. {Math.round(userData.behaviorData.averageOrderValue)}</span>
+                        <span className="stat-label">Avg Order</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-number">{userData.favorites.length}</span>
+                        <span className="stat-label">Favorites</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Preferences */}
+                  <div className="profile-section">
+                    <h3>🎯 Your Preferences</h3>
+                    <div className="preferences-grid">
+                      <div className="pref-item">
+                        <strong>Cuisine:</strong> {userData.preferences.cuisine || 'Not set'}
+                      </div>
+                      <div className="pref-item">
+                        <strong>Spice Level:</strong> {userData.preferences.spiceLevel || 'Not set'}
+                      </div>
+                      <div className="pref-item">
+                        <strong>Budget:</strong> {userData.preferences.budget || 'Not set'}
+                      </div>
+                      <div className="pref-item">
+                        <strong>Dietary:</strong> {userData.preferences.dietary || 'Not set'}
+                      </div>
+                      <div className="pref-item">
+                        <strong>Timing:</strong> {userData.preferences.timing || 'Not set'}
+                      </div>
+                      <div className="pref-item">
+                        <strong>Most Ordered:</strong> {userData.behaviorData.mostOrderedCuisine || 'Not enough data'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent Orders */}
+                  <div className="profile-section">
+                    <h3>📋 Recent Orders</h3>
+                    {userData.orderHistory.length > 0 ? (
+                      <div className="orders-list">
+                        {userData.orderHistory.slice(0, 5).map((order, index) => (
+                          <div key={order.id} className="order-item">
+                            <div className="order-info">
+                              <h4>{order.restaurantName}</h4>
+                              <p>{order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}</p>
+                              <div className="order-meta">
+                                <span>Rs. {order.total}</span>
+                                <span>{new Date(order.date).toLocaleDateString()}</span>
+                                <span className={`status ${order.status}`}>{order.status}</span>
+                              </div>
+                            </div>
+                            <div className="order-actions">
+                              {order.rating ? (
+                                <div className="existing-rating">
+                                  <span>{'⭐'.repeat(order.rating)}</span>
+                                  <span>Rated</span>
+                                </div>
+                              ) : (
+                                <button 
+                                  className="rate-btn"
+                                  onClick={() => handleRateOrder(order.id)}
+                                >
+                                  Rate Order
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="no-orders">No orders yet. Start exploring restaurants!</p>
+                    )}
+                  </div>
+
+                  {/* Favorite Restaurants */}
+                  <div className="profile-section">
+                    <h3>❤️ Favorite Restaurants</h3>
+                    {userData.favorites.length > 0 ? (
+                      <div className="favorites-grid">
+                        {userData.favorites.map(favId => {
+                          const restaurant = restaurants.find(r => r._id === favId);
+                          return restaurant ? (
+                            <div key={favId} className="favorite-item">
+                              <h4>{restaurant.name}</h4>
+                              <p>{restaurant.cuisine?.join(', ')}</p>
+                              <div className="favorite-actions">
+                                <button onClick={() => {
+                                  setShowUserProfile(false);
+                                  selectRestaurant(restaurant);
+                                }}>View Menu</button>
+                                <button 
+                                  className="remove-fav"
+                                  onClick={() => removeFromUserFavorites(currentUser.id, favId)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <p className="no-favorites">No favorites yet. Try some restaurants and add them!</p>
+                    )}
+                  </div>
+
+                  {/* Update Preferences Button */}
+                  <div className="profile-actions">
+                    <button 
+                      className="update-preferences-btn"
+                      onClick={() => {
+                        setShowUserProfile(false);
+                        setIsNewUser(true);
+                        setShowChat(true);
+                        startOnboarding();
+                      }}
+                    >
+                      🔄 Update Preferences
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Rating Modal */}
+      {showRatingModal && selectedOrderForRating && (
+        <div className="modal-overlay" onClick={() => setShowRatingModal(false)}>
+          <div className="rating-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>⭐ Rate Your Order</h2>
+              <button onClick={() => setShowRatingModal(false)} className="close-button">✖</button>
+            </div>
+            
+            <div className="rating-content">
+              <div className="order-summary">
+                <h3>{selectedOrderForRating.restaurantName}</h3>
+                <p>{selectedOrderForRating.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}</p>
+                <p className="order-total">Total: Rs. {selectedOrderForRating.total}</p>
+              </div>
+
+              <div className="rating-section">
+                <h4>How was your experience?</h4>
+                <div className="star-rating">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      className={`star ${currentRating >= star ? 'active' : ''}`}
+                      onClick={() => setCurrentRating(star)}
+                    >
+                      ⭐
+                    </button>
+                  ))}
+                </div>
+                <p className="rating-text">
+                  {currentRating === 0 && 'Click to rate'}
+                  {currentRating === 1 && 'Poor'}
+                  {currentRating === 2 && 'Fair'}
+                  {currentRating === 3 && 'Good'}
+                  {currentRating === 4 && 'Very Good'}
+                  {currentRating === 5 && 'Excellent'}
+                </p>
+              </div>
+
+              <div className="feedback-section">
+                <h4>Share your feedback (optional)</h4>
+                <textarea
+                  value={currentFeedback}
+                  onChange={(e) => setCurrentFeedback(e.target.value)}
+                  placeholder="Tell us about your experience..."
+                  rows="4"
+                />
+              </div>
+
+              <div className="rating-actions">
+                <button className="cancel-btn" onClick={() => setShowRatingModal(false)}>
+                  Cancel
+                </button>
+                <button 
+                  className="submit-rating-btn" 
+                  onClick={submitRating}
+                  disabled={currentRating === 0}
+                >
+                  Submit Rating
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Checkout Modal */}
       {showCheckout && (
         <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
           <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>

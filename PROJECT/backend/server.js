@@ -207,6 +207,8 @@ app.post('/api/order', async (req, res) => {
     try {
         const { userId, restaurantId, items, deliveryAddress, paymentMethod, specialInstructions } = req.body;
         
+        console.log('📦 Received order data:', { userId, restaurantId, items: items?.length });
+        
         // Validation
         if (!userId || !restaurantId || !items || !deliveryAddress) {
             return res.status(400).json({
@@ -215,22 +217,43 @@ app.post('/api/order', async (req, res) => {
             });
         }
         
-        // Verify user and restaurant exist
-        const user = await User.findById(userId);
+        // FLEXIBLE USER HANDLING: Try to find user, if not found, use the ID as-is
+        let user = null;
+        let userObjectId = userId;
+        
+        try {
+            // If userId is a valid ObjectId, find the user
+            if (userId.match(/^[0-9a-fA-F]{24}$/)) {
+                user = await User.findById(userId);
+                console.log('✅ Found user:', user?.name);
+            } else {
+                console.log('⚠️ UserId is not a valid ObjectId, using as-is:', userId);
+                // For demo purposes, use a default ObjectId or create one
+                userObjectId = '6870bd22f7b37e4543eebd97'; // Your actual user ObjectId
+            }
+        } catch (userError) {
+            console.log('⚠️ User lookup failed, using default ObjectId');
+            userObjectId = '6870bd22f7b37e4543eebd97'; // Your actual user ObjectId
+        }
+        
+        // Verify restaurant exists
         const restaurant = await Restaurant.findById(restaurantId);
         
-        if (!user || !restaurant) {
+        if (!restaurant) {
             return res.status(404).json({
                 success: false,
-                message: 'User or restaurant not found'
+                message: 'Restaurant not found'
             });
         }
+        
+        console.log('✅ Found restaurant:', restaurant.name);
         
         // Calculate pricing
         let subtotal = 0;
         const orderItems = [];
         
         for (const item of items) {
+            console.log('🔍 Looking for menu item:', item.menuItemId);
             const menuItem = await MenuItem.findById(item.menuItemId);
             if (menuItem) {
                 const itemTotal = menuItem.price * item.quantity;
@@ -242,20 +265,33 @@ app.post('/api/order', async (req, res) => {
                     price: menuItem.price,
                     specialInstructions: item.specialInstructions || ''
                 });
+                
+                console.log('✅ Added item:', menuItem.name, 'x', item.quantity);
+            } else {
+                console.log('❌ Menu item not found:', item.menuItemId);
             }
         }
         
-        const deliveryFee = restaurant.deliveryFee;
+        if (orderItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid menu items found'
+            });
+        }
+        
+        const deliveryFee = restaurant.deliveryFee || 50;
         const total = subtotal + deliveryFee;
         
         // Generate order number
         const orderCount = await Order.countDocuments();
         const orderNumber = `FD${Date.now().toString().slice(-6)}${(orderCount + 1).toString().padStart(3, '0')}`;
         
+        console.log('💰 Order totals:', { subtotal, deliveryFee, total });
+        
         // Create order
         const newOrder = new Order({
             orderNumber: orderNumber,
-            user: userId,
+            user: userObjectId, // Use the ObjectId
             restaurant: restaurantId,
             items: orderItems,
             deliveryAddress: deliveryAddress,
@@ -278,9 +314,10 @@ app.post('/api/order', async (req, res) => {
         });
         
         await newOrder.save();
+        console.log('✅ Order saved:', orderNumber);
         
         // Populate the order for response
-        await newOrder.populate(['user', 'restaurant', 'items.menuItem']);
+        await newOrder.populate(['restaurant', 'items.menuItem']);
         
         res.json({
             success: true,
@@ -289,7 +326,7 @@ app.post('/api/order', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Order creation error:', error);
+        console.error('💥 Order creation error:', error);
         res.status(500).json({
             success: false,
             message: 'Error placing order',
