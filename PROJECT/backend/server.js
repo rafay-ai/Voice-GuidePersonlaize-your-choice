@@ -10,7 +10,8 @@ const MenuItem = require('./models/MenuItem');
 const Order = require('./models/Order');
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
-
+const { DynamicPricingEngine } = require('./services/dynamicPricing');
+const pricingEngine = new DynamicPricingEngine();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -21,6 +22,50 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
+// Dynamic Pricing Middleware
+const applyDynamicPricing = async (req, res, next) => {
+    try {
+        console.log('🎯 Applying dynamic pricing middleware...');
+        
+        if (req.body.restaurantId && req.body.deliveryAddress) {
+            const restaurant = await Restaurant.findById(req.body.restaurantId);
+            
+            if (restaurant) {
+                // Create location object for pricing calculation
+                const location = {
+                    type: 'Point',
+                    coordinates: [
+                        req.body.deliveryAddress.longitude || 67.0011, // Default Karachi longitude
+                        req.body.deliveryAddress.latitude || 24.8607   // Default Karachi latitude
+                    ]
+                };
+                
+                const baseDeliveryFee = restaurant.deliveryFee || 50;
+                
+                console.log('💰 Calculating pricing for:', {
+                    restaurant: restaurant.name,
+                    baseDeliveryFee,
+                    location
+                });
+                
+                const pricingResult = await pricingEngine.calculateDynamicPrice(
+                    req.body.restaurantId,
+                    baseDeliveryFee,
+                    location
+                );
+                
+                req.dynamicPricing = pricingResult;
+                console.log('✅ Dynamic pricing calculated:', pricingResult);
+            }
+        }
+        next();
+    } catch (error) {
+        console.error('❌ Dynamic pricing middleware error:', error);
+        next(); // Continue without pricing if error
+    }
+};
 
 // Root route - health check
 app.get('/', async (req, res) => {
@@ -203,7 +248,7 @@ app.get('/api/recommendations/:userId', async (req, res) => {
 
 // =============== ORDER ROUTES ===============
 // Place an order
-app.post('/api/order', async (req, res) => {
+app.post('/api/order', applyDynamicPricing, async (req, res) => {
     try {
         const { userId, restaurantId, items, deliveryAddress, paymentMethod, specialInstructions } = req.body;
         
@@ -222,18 +267,16 @@ app.post('/api/order', async (req, res) => {
         let userObjectId = userId;
         
         try {
-            // If userId is a valid ObjectId, find the user
             if (userId.match(/^[0-9a-fA-F]{24}$/)) {
                 user = await User.findById(userId);
                 console.log('✅ Found user:', user?.name);
             } else {
                 console.log('⚠️ UserId is not a valid ObjectId, using as-is:', userId);
-                // For demo purposes, use a default ObjectId or create one
-                userObjectId = '6870bd22f7b37e4543eebd97'; // Your actual user ObjectId
+                userObjectId = '6870bd22f7b37e4543eebd97';
             }
         } catch (userError) {
             console.log('⚠️ User lookup failed, using default ObjectId');
-            userObjectId = '6870bd22f7b37e4543eebd97'; // Your actual user ObjectId
+            userObjectId = '6870bd22f7b37e4543eebd97';
         }
         
         // Verify restaurant exists
@@ -279,31 +322,64 @@ app.post('/api/order', async (req, res) => {
             });
         }
         
-        const deliveryFee = restaurant.deliveryFee || 50;
-        const total = subtotal + deliveryFee;
+        // USE DYNAMIC PRICING if available, otherwise use static pricing
+        let deliveryFee = restaurant.deliveryFee || 50;
+        let dynamicDeliveryFee = deliveryFee;
+        let pricingData = {
+            baseDeliveryFee: deliveryFee,
+            dynamicDeliveryFee: deliveryFee,
+            pricingMultiplier: 1.0,
+            surgeActive: false
+        };
+        
+        if (req.dynamicPricing) {
+            dynamicDeliveryFee = req.dynamicPricing.dynamicPrice;
+            pricingData = {
+                baseDeliveryFee: req.dynamicPricing.originalPrice,
+                dynamicDeliveryFee: req.dynamicPricing.dynamicPrice,
+                pricingMultiplier: req.dynamicPricing.multiplier,
+                pricingBreakdown: req.dynamicPricing.breakdown,
+                surgeActive: req.dynamicPricing.surgeActive,
+                pricingTimestamp: new Date()
+            };
+            console.log('💰 Using dynamic pricing - Fee changed from', deliveryFee, 'to', dynamicDeliveryFee);
+        }
+        
+        const total = subtotal + dynamicDeliveryFee;
         
         // Generate order number
         const orderCount = await Order.countDocuments();
         const orderNumber = `FD${Date.now().toString().slice(-6)}${(orderCount + 1).toString().padStart(3, '0')}`;
         
-        console.log('💰 Order totals:', { subtotal, deliveryFee, total });
+        console.log('💰 Order totals:', { subtotal, deliveryFee: dynamicDeliveryFee, total });
         
-        // Create order
+        // Create order with enhanced pricing data
         const newOrder = new Order({
             orderNumber: orderNumber,
-            user: userObjectId, // Use the ObjectId
+            user: userObjectId,
             restaurant: restaurantId,
             items: orderItems,
-            deliveryAddress: deliveryAddress,
+            deliveryAddress: {
+                ...deliveryAddress,
+                coordinates: {
+                    type: 'Point',
+                    coordinates: [
+                        deliveryAddress.longitude || 67.0011,
+                        deliveryAddress.latitude || 24.8607
+                    ]
+                }
+            },
             paymentMethod: paymentMethod || 'Cash on Delivery',
             specialInstructions: specialInstructions || '',
             pricing: {
                 subtotal: subtotal,
-                deliveryFee: deliveryFee,
+                deliveryFee: dynamicDeliveryFee,
                 tax: 0,
-                total: total
+                total: total,
+                // Add dynamic pricing data
+                ...pricingData
             },
-            estimatedDeliveryTime: new Date(Date.now() + 45 * 60000) // 45 minutes from now
+            estimatedDeliveryTime: new Date(Date.now() + 45 * 60000)
         });
         
         // Add to status history
@@ -322,7 +398,8 @@ app.post('/api/order', async (req, res) => {
         res.json({
             success: true,
             message: "Order placed successfully!",
-            order: newOrder
+            order: newOrder,
+            dynamicPricing: req.dynamicPricing || null
         });
         
     } catch (error) {
@@ -643,6 +720,130 @@ app.get('/api/analytics/sales-trends', async (req, res) => {
         });
     }
 });
+
+console.log('🚀 Setting up Dynamic Pricing routes...');
+
+// Get dynamic price for a delivery
+app.post('/api/pricing/calculate-price', async (req, res) => {
+    try {
+        console.log('📊 Price calculation request received:', req.body);
+        
+        const { restaurantId, baseDeliveryFee, location } = req.body;
+        
+        if (!restaurantId || !baseDeliveryFee || !location) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: restaurantId, baseDeliveryFee, location'
+            });
+        }
+
+        const pricingResult = await pricingEngine.calculateDynamicPrice(
+            restaurantId,
+            baseDeliveryFee,
+            location
+        );
+
+        console.log('✅ Price calculation completed:', pricingResult);
+
+        res.json({
+            success: true,
+            pricing: pricingResult,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Pricing API error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            fallbackPrice: req.body.baseDeliveryFee
+        });
+    }
+});
+
+// Get current surge status for area
+app.post('/api/pricing/surge-status', async (req, res) => {
+    try {
+        console.log('🔥 Surge status request:', req.body);
+        
+        const { location, radius = 5000 } = req.body;
+        
+        // Calculate current surge factors
+        const now = new Date();
+        const hour = now.getHours();
+        const isPeakTime = [11, 12, 13, 18, 19, 20, 21].includes(hour);
+        const isWeekend = [0, 6].includes(now.getDay());
+        
+        let averageMultiplier = 1.0;
+        if (isPeakTime) averageMultiplier += 0.3;
+        if (isWeekend) averageMultiplier += 0.1;
+        
+        // Add some randomness for demand
+        if (Math.random() > 0.7) averageMultiplier += 0.2;
+        
+        const surgeData = {
+            active: averageMultiplier > 1.1,
+            multiplier: Math.round(averageMultiplier * 100) / 100,
+            level: averageMultiplier > 1.5 ? 'high' : averageMultiplier > 1.2 ? 'medium' : 'low',
+            factors: {
+                time: isPeakTime,
+                weather: Math.random() > 0.8, // Random weather impact
+                demand: Math.random() > 0.7
+            }
+        };
+        
+        console.log('✅ Surge status calculated:', surgeData);
+        
+        res.json({
+            success: true,
+            surgeStatus: surgeData
+        });
+    } catch (error) {
+        console.error('❌ Surge status error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to get surge status' 
+        });
+    }
+});
+
+// Get pricing analytics (mock data for now)
+app.get('/api/pricing/analytics/:restaurantId', async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { timeRange } = req.query;
+        
+        console.log('📈 Analytics request for restaurant:', restaurantId);
+        
+        // Mock analytics data
+        const analytics = {
+            averageMultiplier: 1.15,
+            maxMultiplier: 2.1,
+            minMultiplier: 0.85,
+            totalSurgeHours: 18,
+            revenueIncrease: '12.5%',
+            customerSatisfaction: 4.2,
+            hourlyBreakdown: Array.from({length: 24}, (_, hour) => ({
+                hour,
+                averageMultiplier: Math.random() * 0.8 + 0.8,
+                orderCount: Math.floor(Math.random() * 50) + 10
+            }))
+        };
+        
+        res.json({
+            success: true,
+            analytics,
+            restaurantId
+        });
+    } catch (error) {
+        console.error('❌ Analytics API error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch analytics' 
+        });
+    }
+});
+
+
 // =============== ERROR HANDLING ===============
 app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
@@ -653,6 +854,11 @@ app.use((err, req, res, next) => {
     });
 });
 
+console.log('💰 Dynamic Pricing System initialized');
+console.log('🎯 New pricing endpoints available:');
+console.log('   POST /api/pricing/calculate-price');
+console.log('   GET  /api/pricing/analytics/:restaurantId');
+console.log('   POST /api/pricing/surge-status');
 // Start the server
 app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);

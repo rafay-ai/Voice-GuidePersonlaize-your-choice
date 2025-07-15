@@ -276,6 +276,7 @@ const enhancedRecommendationEngineArrow = {
     return Math.max(0, 30 - Math.abs(userLevel - restLevel) * 10);
   }
 };
+
 // ===== 5. CHATBOT RESPONSES =====
 const chatbotResponses = {
   greetings: [
@@ -310,7 +311,9 @@ function App() {
   const [showChat, setShowChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
-  
+  const [dynamicPricing, setDynamicPricing] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [surgeStatus, setSurgeStatus] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -367,6 +370,81 @@ function App() {
   const [selectedOrderForRating, setSelectedOrderForRating] = useState(null);
   const [currentRating, setCurrentRating] = useState(0);
   const [currentFeedback, setCurrentFeedback] = useState('');
+
+  // Function to fetch surge status
+  const fetchSurgeStatus = async () => {
+    try {
+      const location = {
+        type: 'Point',
+        coordinates: [67.0011, 24.8607]
+      };
+      
+      const response = await fetch('http://localhost:5000/api/pricing/surge-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setSurgeStatus(data.surgeStatus);
+        console.log('🔥 Surge status:', data.surgeStatus);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching surge status:', error);
+    }
+  };
+
+  // Enhanced calculateTotal function to use dynamic pricing
+  const calculateTotalWithDynamicPricing = () => {
+    const subtotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+    const deliveryFee = dynamicPricing ? dynamicPricing.dynamicPrice : 50;
+    const savings = dynamicPricing ? (dynamicPricing.originalPrice - dynamicPricing.dynamicPrice) : 0;
+    
+    return { 
+      subtotal, 
+      deliveryFee, 
+      total: subtotal + deliveryFee,
+      savings
+    };
+  };
+
+  // Function to fetch dynamic pricing
+  const fetchDynamicPricing = async () => {
+    if (!selectedRestaurant || cart.length === 0) return;
+    
+    console.log('💰 Fetching dynamic pricing for:', selectedRestaurant.name);
+    setPricingLoading(true);
+    
+    try {
+      const baseDeliveryFee = selectedRestaurant.deliveryFee || 50;
+      const location = {
+        type: 'Point',
+        coordinates: [67.0011, 24.8607] // Karachi coordinates
+      };
+      
+      const response = await fetch('http://localhost:5000/api/pricing/calculate-price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: selectedRestaurant._id,
+          baseDeliveryFee,
+          location
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setDynamicPricing(data.pricing);
+        console.log('✅ Dynamic pricing received:', data.pricing);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching dynamic pricing:', error);
+    } finally {
+      setPricingLoading(false);
+    }
+  };
 
   // ===== ANALYTICS FUNCTION =====
   const fetchAnalytics = useCallback(() => {
@@ -456,6 +534,23 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [currentUser, fetchAnalytics]);
+
+  // Fetch pricing when cart or restaurant changes
+  useEffect(() => {
+    if (selectedRestaurant && cart.length > 0) {
+      console.log('🎯 Cart or restaurant changed, fetching pricing...');
+      fetchDynamicPricing();
+      fetchSurgeStatus();
+      
+      // Refresh pricing every 2 minutes while user is on the page
+      const interval = setInterval(() => {
+        fetchDynamicPricing();
+        fetchSurgeStatus();
+      }, 120000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [selectedRestaurant, cart.length]);
 
   // ===== API FUNCTIONS =====
   const fetchRestaurants = async () => {
@@ -751,41 +846,41 @@ function App() {
   };
 
   const handleRateFromTracking = () => {
-  if (orderStatus && currentUser) {
-    // Create a proper order object for rating
-    const orderForRating = {
-      id: orderStatus._id || orderStatus.orderNumber || `order_${Date.now()}`,
-      restaurantId: orderStatus.restaurant?._id || orderStatus.restaurant || selectedRestaurant?._id,
-      restaurantName: orderStatus.restaurant?.name || selectedRestaurant?.name || 'Restaurant',
-      items: orderStatus.items?.map(item => ({
-        name: item.menuItem?.name || item.name || 'Item',
-        quantity: item.quantity || 1,
-        price: item.price || 0
-      })) || cart.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      total: orderStatus.pricing?.total || calculateTotal().total,
-      status: 'delivered',
-      date: new Date().toISOString(),
-      rating: null,
-      feedback: null
-    };
-    
-    console.log('Setting up rating for order:', orderForRating);
-    
-    // Set up rating modal
-    setSelectedOrderForRating(orderForRating);
-    setCurrentRating(0);
-    setCurrentFeedback('');
-    setShowRatingModal(true);
-    setShowOrderTracking(false); // Close tracking modal
-  } else {
-    console.log('Cannot rate: missing orderStatus or currentUser');
-    alert('Unable to load rating. Please try again.');
-  }
-};
+    if (orderStatus && currentUser) {
+      // Create a proper order object for rating
+      const orderForRating = {
+        id: orderStatus._id || orderStatus.orderNumber || `order_${Date.now()}`,
+        restaurantId: orderStatus.restaurant?._id || orderStatus.restaurant || selectedRestaurant?._id,
+        restaurantName: orderStatus.restaurant?.name || selectedRestaurant?.name || 'Restaurant',
+        items: orderStatus.items?.map(item => ({
+          name: item.menuItem?.name || item.name || 'Item',
+          quantity: item.quantity || 1,
+          price: item.price || 0
+        })) || cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        total: orderStatus.pricing?.total || calculateTotal().total,
+        status: 'delivered',
+        date: new Date().toISOString(),
+        rating: null,
+        feedback: null
+      };
+      
+      console.log('Setting up rating for order:', orderForRating);
+      
+      // Set up rating modal
+      setSelectedOrderForRating(orderForRating);
+      setCurrentRating(0);
+      setCurrentFeedback('');
+      setShowRatingModal(true);
+      setShowOrderTracking(false); // Close tracking modal
+    } else {
+      console.log('Cannot rate: missing orderStatus or currentUser');
+      alert('Unable to load rating. Please try again.');
+    }
+  };
 
   // ===== USER PROFILE FUNCTIONS =====
   const handleRateOrder = (orderId) => {
@@ -798,35 +893,35 @@ function App() {
   };
 
   const submitRating = () => {
-  if (selectedOrderForRating && currentRating > 0) {
-    // Add rating to user data
-    addUserRating(currentUser.id, selectedOrderForRating.id, currentRating, currentFeedback);
-    
-    // Save to order history as well
-    addToUserOrderHistory(currentUser.id, {
-      ...selectedOrderForRating,
-      rating: currentRating,
-      feedback: currentFeedback
-    }, restaurants);
-    
-    // Close modal and reset
-    setShowRatingModal(false);
-    setSelectedOrderForRating(null);
-    setCurrentRating(0);
-    setCurrentFeedback('');
-    
-    // Show success message
-    alert('Thank you for your feedback! Your rating helps us improve our service. 🌟');
-    
-    console.log('Rating submitted:', {
-      orderId: selectedOrderForRating.id,
-      rating: currentRating,
-      feedback: currentFeedback
-    });
-  } else {
-    alert('Please select a rating before submitting.');
-  }
-};
+    if (selectedOrderForRating && currentRating > 0) {
+      // Add rating to user data
+      addUserRating(currentUser.id, selectedOrderForRating.id, currentRating, currentFeedback);
+      
+      // Save to order history as well
+      addToUserOrderHistory(currentUser.id, {
+        ...selectedOrderForRating,
+        rating: currentRating,
+        feedback: currentFeedback
+      }, restaurants);
+      
+      // Close modal and reset
+      setShowRatingModal(false);
+      setSelectedOrderForRating(null);
+      setCurrentRating(0);
+      setCurrentFeedback('');
+      
+      // Show success message
+      alert('Thank you for your feedback! Your rating helps us improve our service. 🌟');
+      
+      console.log('Rating submitted:', {
+        orderId: selectedOrderForRating.id,
+        rating: currentRating,
+        feedback: currentFeedback
+      });
+    } else {
+      alert('Please select a rating before submitting.');
+    }
+  };
 
   const toggleFavorite = (restaurantId) => {
     if (!currentUser) {
@@ -1181,7 +1276,7 @@ function App() {
                     ← Back to Restaurants
                   </button>
                   <h2>{selectedRestaurant.name} Menu</h2>
-                    {menu && menu.length > 0 ? (
+                  {menu && menu.length > 0 ? (
                     <div className="menu-grid">
                       {menu.map(item => (
                         <div key={item._id} className="menu-item">
@@ -1207,6 +1302,18 @@ function App() {
             </div>
 
             <div className="cart-section">
+              {/* Surge Status Banner */}
+              {surgeStatus && surgeStatus.active && (
+                <div className={`surge-banner ${surgeStatus.level}`}>
+                  🔥 {surgeStatus.level.toUpperCase()} DEMAND - {surgeStatus.multiplier}x Pricing
+                  <div className="surge-factors">
+                    {surgeStatus.factors.time && <span>⏰ Peak Time</span>}
+                    {surgeStatus.factors.weather && <span>🌦️ Weather</span>}
+                    {surgeStatus.factors.demand && <span>📈 High Demand</span>}
+                  </div>
+                </div>
+              )}
+              
               <h3>Your Order</h3>
               {cart.length === 0 ? (
                 <p className="empty-cart">Your cart is empty</p>
@@ -1229,705 +1336,762 @@ function App() {
                       </div>
                     </div>
                   ))}
+                  
                   <div className="cart-total">
-                    <p>Subtotal: Rs. {calculateTotal().subtotal}</p>
-                    <p>Delivery: Rs. {calculateTotal().deliveryFee}</p>
-                    <p className="total">Total: Rs. {calculateTotal().total}</p>
+                    <p>Subtotal: Rs. {calculateTotalWithDynamicPricing().subtotal}</p>
+                    
+                    {/* Dynamic Pricing Display */}
+                    <div className="delivery-fee-section">
+                      {dynamicPricing ? (
+                        <div className="dynamic-pricing-display">
+                          <div className="delivery-fee-line">
+                            <span>Delivery Fee:</span>
+                            <div className="price-breakdown">
+                              {dynamicPricing.multiplier !== 1.0 && (
+                                <span className="original-price">Rs. {dynamicPricing.originalPrice}</span>
+                              )}
+                              <span className={`dynamic-price ${dynamicPricing.surgeActive ? 'surge' : calculateTotalWithDynamicPricing().savings > 0 ? 'discount' : ''}`}>
+                                Rs. {dynamicPricing.dynamicPrice}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {dynamicPricing.surgeActive && (
+                            <div className="pricing-notice surge">
+                              🔥 Surge pricing active ({dynamicPricing.multiplier}x)
+                            </div>
+                          )}
+                          
+                          {calculateTotalWithDynamicPricing().savings > 0 && (
+                            <div className="pricing-notice discount">
+                              💰 You save Rs. {calculateTotalWithDynamicPricing().savings.toFixed(2)} with off-peak pricing!
+                            </div>
+                          )}
+                          
+                          {pricingLoading && (
+                            <div className="pricing-loading">
+                              <span className="spinner">⟳</span> Updating prices...
+                            </div>
+                          )}
+                          
+                          {/* Pricing Breakdown */}
+                          <div className="pricing-breakdown-mini">
+                            <div className="breakdown-item">
+                              <span>Time factor:</span>
+                              <span>{dynamicPricing.breakdown.time}x</span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>Demand factor:</span>
+                              <span>{dynamicPricing.breakdown.demand}x</span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>Weather factor:</span>
+                              <span>{dynamicPricing.breakdown.weather}x</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <p>Delivery: Rs. {calculateTotalWithDynamicPricing().deliveryFee}</p>
+                      )}
+                    </div>
+                    
+                    <p className="total">Total: Rs. {calculateTotalWithDynamicPricing().total}</p>
                   </div>
+                  
                   <button className="order-button" onClick={() => setShowCheckout(true)}>
-                    Place Order
+                    Place Order - Rs. {calculateTotalWithDynamicPricing().total}
                   </button>
                 </>
               )}
             </div>
           </>
         )}
-      </div>
 
-      {/* Enhanced Smart Chatbot */}
-      {showChat && (
-        <div className="smart-chatbot">
-          <div className="chat-header">
-            <div className="chat-title">
-              <h3>🤖 Smart Food Assistant</h3>
-              {isNewUser && <span className="onboarding-badge">Setting up your profile...</span>}
+        {/* Enhanced Smart Chatbot */}
+        {showChat && (
+          <div className="smart-chatbot">
+            <div className="chat-header">
+              <div className="chat-title">
+                <h3>🤖 Smart Food Assistant</h3>
+                {isNewUser && <span className="onboarding-badge">Setting up your profile...</span>}
+              </div>
+              <button onClick={() => setShowChat(false)} className="close-chat">✖</button>
             </div>
-            <button onClick={() => setShowChat(false)} className="close-chat">✖</button>
-          </div>
 
-          <div className="chat-messages">
-            {messages.length === 0 && !isNewUser && (
-              <div className="chat-welcome-container">
-                <div className="ai-avatar">🍕</div>
-                <p className="chat-welcome">Hi! I'm your AI food assistant. I can help you:</p>
-                <div className="welcome-features">
-                  <div className="feature">🎯 Get personalized recommendations</div>
-                  <div className="feature">🍔 Find restaurants by cuisine</div>
-                  <div className="feature">💰 Filter by budget</div>
-                  <div className="feature">🌶️ Match spice preferences</div>
-                </div>
-                {currentUser && Object.keys(getUserData(currentUser.id).preferences).length === 0 && (
-                  <button 
-                    className="setup-preferences-btn"
-                    onClick={startOnboarding}
-                  >
-                    🎯 Set Up My Preferences
-                  </button>
-                )}
-              </div>
-            )}
-
-            {messages.map((msg, index) => (
-              <div key={index} className="message-container">
-                <div className={`message ${msg.role}`}>
-                  <div className="message-content">
-                    {msg.content}
+            <div className="chat-messages">
+              {messages.length === 0 && !isNewUser && (
+                <div className="chat-welcome-container">
+                  <div className="ai-avatar">🍕</div>
+                  <p className="chat-welcome">Hi! I'm your AI food assistant. I can help you:</p>
+                  <div className="welcome-features">
+                    <div className="feature">🎯 Get personalized recommendations</div>
+                    <div className="feature">🍔 Find restaurants by cuisine</div>
+                    <div className="feature">💰 Filter by budget</div>
+                    <div className="feature">🌶️ Match spice preferences</div>
                   </div>
-                  <div className="message-time">{msg.timestamp}</div>
-                </div>
-
-                {/* Onboarding options */}
-                {msg.questionData && (
-                  <div className="onboarding-options">
-                    {msg.questionData.options.map((option, idx) => (
-                      <button
-                        key={idx}
-                        className="option-button"
-                        onClick={() => handleOptionSelect(option, msg.questionData.key)}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Quick replies */}
-                {msg.quickReplies && (
-                  <div className="quick-replies">
-                    {msg.quickReplies.map((reply, idx) => (
-                      <button
-                        key={idx}
-                        className="quick-reply-btn"
-                        onClick={() => handleQuickReply(reply)}
-                      >
-                        {reply}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Restaurant recommendations */}
-                {msg.recommendations && msg.recommendations.length > 0 && (
-                  <div className="chat-recommendations">
-                    {msg.recommendations.map((restaurant, idx) => (
-                      <div 
-                        key={idx} 
-                        className="recommendation-card"
-                        onClick={() => selectRestaurant(restaurant)}
-                      >
-                        <div className="rec-header">
-                          <h4>{restaurant.name}</h4>
-                          <div className="rec-rating">⭐ {restaurant.rating}</div>
-                        </div>
-                        <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
-                        <div className="rec-info">
-                          <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
-                          <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
-                        </div>
-                        {restaurant.score && (
-                          <div className="match-score">
-                            {Math.round(restaurant.score)}% match
-                          </div>
-                        )}
-                        {restaurant.personalizedReason && (
-                          <div className="recommendation-reason">
-                            {restaurant.personalizedReason}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="typing-indicator">
-                <div className="typing-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <span className="typing-text">AI is thinking...</span>
-              </div>
-            )}
-          </div>
-
-          <div className="chat-input-section">
-            {!isNewUser && (
-              <div className="suggestions">
-                <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
-                  🎯 Recommendations
-                </button>
-                <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
-                  🔥 Popular
-                </button>
-                <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
-                  📋 My Orders
-                </button>
-                <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
-                  ❤️ Favorites
-                </button>
-              </div>
-            )}
-            
-            <div className="chat-input">
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !isNewUser && sendMessage()}
-                placeholder={isNewUser ? "Please select an option above..." : "Ask me anything about food..."}
-                disabled={isNewUser}
-              />
-              <button 
-                onClick={sendMessage} 
-                disabled={isNewUser || !inputMessage.trim()}
-                className="send-button"
-              >
-                <span>🚀</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* User Profile Modal */}
-      {showUserProfile && currentUser && (
-        <div className="modal-overlay" onClick={() => setShowUserProfile(false)}>
-          <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>👤 My Profile</h2>
-              <button onClick={() => setShowUserProfile(false)} className="close-button">✖</button>
-            </div>
-            
-            {(() => {
-              const userData = getUserData(currentUser.id);
-              return (
-                <div className="profile-content">
-                  {/* User Stats */}
-                  <div className="profile-section">
-                    <h3>📊 Your Food Journey</h3>
-                    <div className="stats-grid">
-                      <div className="stat-item">
-                        <span className="stat-number">{userData.behaviorData.totalOrders}</span>
-                        <span className="stat-label">Total Orders</span>
-                      </div>
-                      <div className="stat-item">
-                        <span className="stat-number">Rs. {userData.behaviorData.totalSpent}</span>
-                        <span className="stat-label">Total Spent</span>
-                      </div>
-                      <div className="stat-item">
-                        <span className="stat-number">Rs. {Math.round(userData.behaviorData.averageOrderValue)}</span>
-                        <span className="stat-label">Avg Order</span>
-                      </div>
-                      <div className="stat-item">
-                        <span className="stat-number">{userData.favorites.length}</span>
-                        <span className="stat-label">Favorites</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Preferences */}
-                  <div className="profile-section">
-                    <h3>🎯 Your Preferences</h3>
-                    <div className="preferences-grid">
-                      <div className="pref-item">
-                        <strong>Cuisine:</strong> {userData.preferences.cuisine || 'Not set'}
-                      </div>
-                      <div className="pref-item">
-                        <strong>Spice Level:</strong> {userData.preferences.spiceLevel || 'Not set'}
-                      </div>
-                      <div className="pref-item">
-                        <strong>Budget:</strong> {userData.preferences.budget || 'Not set'}
-                      </div>
-                      <div className="pref-item">
-                        <strong>Dietary:</strong> {userData.preferences.dietary || 'Not set'}
-                      </div>
-                      <div className="pref-item">
-                        <strong>Timing:</strong> {userData.preferences.timing || 'Not set'}
-                      </div>
-                      <div className="pref-item">
-                        <strong>Most Ordered:</strong> {userData.behaviorData.mostOrderedCuisine || 'Not enough data'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recent Orders */}
-                  <div className="profile-section">
-                    <h3>📋 Recent Orders</h3>
-                    {userData.orderHistory.length > 0 ? (
-                      <div className="orders-list">
-                        {userData.orderHistory.slice(0, 5).map((order, index) => (
-                          <div key={order.id} className="order-item">
-                            <div className="order-info">
-                              <h4>{order.restaurantName}</h4>
-                              <p>{order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}</p>
-                              <div className="order-meta">
-                                <span>Rs. {order.total}</span>
-                                <span>{new Date(order.date).toLocaleDateString()}</span>
-                                <span className={`status ${order.status}`}>{order.status}</span>
-                              </div>
-                            </div>
-                            <div className="order-actions">
-                              {order.rating ? (
-                                <div className="existing-rating">
-                                  <span>{'⭐'.repeat(order.rating)}</span>
-                                  <span>Rated</span>
-                                </div>
-                              ) : (
-                                <button 
-                                  className="rate-btn"
-                                  onClick={() => handleRateOrder(order.id)}
-                                >
-                                  Rate Order
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="no-orders">No orders yet. Start exploring restaurants!</p>
-                    )}
-                  </div>
-
-                  {/* Favorite Restaurants */}
-                  <div className="profile-section">
-                    <h3>❤️ Favorite Restaurants</h3>
-                    {userData.favorites.length > 0 ? (
-                      <div className="favorites-grid">
-                        {userData.favorites.map(favId => {
-                          const restaurant = restaurants.find(r => r._id === favId);
-                          return restaurant ? (
-                            <div key={favId} className="favorite-item">
-                              <h4>{restaurant.name}</h4>
-                              <p>{restaurant.cuisine?.join(', ')}</p>
-                              <div className="favorite-actions">
-                                <button onClick={() => {
-                                  setShowUserProfile(false);
-                                  selectRestaurant(restaurant);
-                                }}>View Menu</button>
-                                <button 
-                                  className="remove-fav"
-                                  onClick={() => removeFromUserFavorites(currentUser.id, favId)}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    ) : (
-                      <p className="no-favorites">No favorites yet. Try some restaurants and add them!</p>
-                    )}
-                  </div>
-
-                  {/* Update Preferences Button */}
-                  <div className="profile-actions">
+                  {currentUser && Object.keys(getUserData(currentUser.id).preferences).length === 0 && (
                     <button 
-                      className="update-preferences-btn"
-                      onClick={() => {
-                        setShowUserProfile(false);
-                        setIsNewUser(true);
-                        setShowChat(true);
-                        startOnboarding();
-                      }}
+                      className="setup-preferences-btn"
+                      onClick={startOnboarding}
                     >
-                      🔄 Update Preferences
+                      🎯 Set Up My Preferences
                     </button>
-                  </div>
+                  )}
                 </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+              )}
 
-      {/* Rating Modal */}
-      {showRatingModal && selectedOrderForRating && (
-  <div className="modal-overlay" onClick={() => setShowRatingModal(false)}>
-    <div className="rating-modal" onClick={(e) => e.stopPropagation()}>
-      <div className="modal-header">
-        <h2>⭐ Rate Your Order</h2>
-        <button onClick={() => setShowRatingModal(false)} className="close-button">✖</button>
-      </div>
-      
-      <div className="rating-content">
-        <div className="order-summary">
-          <h3>{selectedOrderForRating.restaurantName}</h3>
-          <div className="rated-items">
-            {selectedOrderForRating.items && selectedOrderForRating.items.length > 0 ? (
-              selectedOrderForRating.items.map((item, index) => (
-                <p key={index}>{item.name} x{item.quantity}</p>
-              ))
-            ) : (
-              <p>Order items</p>
-            )}
-          </div>
-          <p className="order-total">Total: Rs. {selectedOrderForRating.total}</p>
-          <small className="order-date">
-            {selectedOrderForRating.date ? new Date(selectedOrderForRating.date).toLocaleDateString() : 'Today'}
-          </small>
-        </div>
+              {messages.map((msg, index) => (
+                <div key={index} className="message-container">
+                  <div className={`message ${msg.role}`}>
+                    <div className="message-content">
+                      {msg.content}
+                    </div>
+                    <div className="message-time">{msg.timestamp}</div>
+                  </div>
 
-        <div className="rating-section">
-          <h4>How was your experience?</h4>
-          <div className="star-rating">
-            {[1, 2, 3, 4, 5].map(star => (
-              <button
-                key={star}
-                className={`star ${currentRating >= star ? 'active' : ''}`}
-                onClick={() => setCurrentRating(star)}
-              >
-                ⭐
-              </button>
-            ))}
-          </div>
-          <p className="rating-text">
-            {currentRating === 0 && 'Click to rate'}
-            {currentRating === 1 && 'Poor - Not satisfied 😞'}
-            {currentRating === 2 && 'Fair - Below expectations 😐'}
-            {currentRating === 3 && 'Good - Satisfied 😊'}
-            {currentRating === 4 && 'Very Good - Exceeded expectations 😄'}
-            {currentRating === 5 && 'Excellent - Outstanding! 🤩'}
-          </p>
-        </div>
+                  {/* Onboarding options */}
+                  {msg.questionData && (
+                    <div className="onboarding-options">
+                      {msg.questionData.options.map((option, idx) => (
+                        <button
+                          key={idx}
+                          className="option-button"
+                          onClick={() => handleOptionSelect(option, msg.questionData.key)}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-        <div className="feedback-section">
-          <h4>Share your feedback (optional)</h4>
-          <textarea
-            value={currentFeedback}
-            onChange={(e) => setCurrentFeedback(e.target.value)}
-            placeholder="Tell us about your experience... Was the food good? How was the delivery? Any suggestions?"
-            rows="4"
-          />
-        </div>
+                  {/* Quick replies */}
+                  {msg.quickReplies && (
+                    <div className="quick-replies">
+                      {msg.quickReplies.map((reply, idx) => (
+                        <button
+                          key={idx}
+                          className="quick-reply-btn"
+                          onClick={() => handleQuickReply(reply)}
+                        >
+                          {reply}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-        <div className="rating-actions">
-          <button 
-            className="cancel-btn" 
-            onClick={() => setShowRatingModal(false)}
-          >
-            Cancel
-          </button>
-          <button 
-            className="submit-rating-btn" 
-            onClick={submitRating}
-            disabled={currentRating === 0}
-          >
-            Submit Rating {currentRating > 0 && `(${currentRating} ⭐)`}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                  {/* Restaurant recommendations */}
+                  {msg.recommendations && msg.recommendations.length > 0 && (
+                    <div className="chat-recommendations">
+                      {msg.recommendations.map((restaurant, idx) => (
+                        <div 
+                          key={idx} 
+                          className="recommendation-card"
+                          onClick={() => selectRestaurant(restaurant)}
+                        >
+                          <div className="rec-header">
+                            <h4>{restaurant.name}</h4>
+                            <div className="rec-rating">⭐ {restaurant.rating}</div>
+                          </div>
+                          <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
+                          <div className="rec-info">
+                            <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
+                            <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
+                          </div>
+                          {restaurant.score && (
+                            <div className="match-score">
+                              {Math.round(restaurant.score)}% match
+                            </div>
+                          )}
+                          {restaurant.personalizedReason && (
+                            <div className="recommendation-reason">
+                              {restaurant.personalizedReason}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
 
-      {/* Checkout Modal */}
-      {showCheckout && (
-        <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
-          <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Complete Your Order</h2>
-              <button onClick={() => setShowCheckout(false)} className="close-button">✖</button>
+              {isTyping && (
+                <div className="typing-indicator">
+                  <div className="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="typing-text">AI is thinking...</span>
+                </div>
+              )}
             </div>
-            
-            <div className="checkout-form">
-              <h3>Delivery Details</h3>
+
+            <div className="chat-input-section">
+              {!isNewUser && (
+                <div className="suggestions">
+                  <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
+                    🎯 Recommendations
+                  </button>
+                  <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
+                    🔥 Popular
+                  </button>
+                  <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
+                    📋 My Orders
+                  </button>
+                  <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
+                    ❤️ Favorites
+                  </button>
+                </div>
+              )}
               
-              <div className="form-group">
-                <label>Full Name</label>
+              <div className="chat-input">
                 <input
                   type="text"
-                  value={deliveryAddress.name}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, name: e.target.value})}
-                  placeholder="Enter your name"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && !isNewUser && sendMessage()}
+                  placeholder={isNewUser ? "Please select an option above..." : "Ask me anything about food..."}
+                  disabled={isNewUser}
                 />
-              </div>
-
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input
-                  type="tel"
-                  value={deliveryAddress.phone}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, phone: e.target.value})}
-                  placeholder="03XX-XXXXXXX"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Area</label>
-                <select
-                  value={deliveryAddress.area}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, area: e.target.value})}
+                <button 
+                  onClick={sendMessage} 
+                  disabled={isNewUser || !inputMessage.trim()}
+                  className="send-button"
                 >
-                  <option value="">Select Area</option>
-                  <option value="Gulshan-e-Iqbal">Gulshan-e-Iqbal</option>
-                  <option value="DHA">DHA</option>
-                  <option value="Clifton">Clifton</option>
-                  <option value="PECHS">PECHS</option>
-                  <option value="Nazimabad">Nazimabad</option>
-                  <option value="FB Area">FB Area</option>
-                </select>
+                  <span>🚀</span>
+                </button>
               </div>
+            </div>
+          </div>
+        )}
 
-              <div className="form-group">
-                <label>Street Address</label>
-                <input
-                  type="text"
-                  value={deliveryAddress.street}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, street: e.target.value})}
-                  placeholder="House #, Street name"
-                />
+        {/* User Profile Modal */}
+        {showUserProfile && currentUser && (
+          <div className="modal-overlay" onClick={() => setShowUserProfile(false)}>
+            <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>👤 My Profile</h2>
+                <button onClick={() => setShowUserProfile(false)} className="close-button">✖</button>
               </div>
+              
+              {(() => {
+                const userData = getUserData(currentUser.id);
+                return (
+                  <div className="profile-content">
+                    {/* User Stats */}
+                    <div className="profile-section">
+                      <h3>📊 Your Food Journey</h3>
+                      <div className="stats-grid">
+                        <div className="stat-item">
+                          <span className="stat-number">{userData.behaviorData.totalOrders}</span>
+                          <span className="stat-label">Total Orders</span>
+                        </div>
+                        <div className="stat-item">
+                          <span className="stat-number">Rs. {userData.behaviorData.totalSpent}</span>
+                          <span className="stat-label">Total Spent</span>
+                        </div>
+                        <div className="stat-item">
+                          <span className="stat-number">Rs. {Math.round(userData.behaviorData.averageOrderValue)}</span>
+                          <span className="stat-label">Avg Order</span>
+                        </div>
+                        <div className="stat-item">
+                          <span className="stat-number">{userData.favorites.length}</span>
+                          <span className="stat-label">Favorites</span>
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="form-group">
-                <label>Delivery Instructions (Optional)</label>
-                <textarea
-                  value={deliveryAddress.instructions}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, instructions: e.target.value})}
-                  placeholder="Gate code, landmark, etc."
-                  rows="3"
-                />
-              </div>
+                    {/* Preferences */}
+                    <div className="profile-section">
+                      <h3>🎯 Your Preferences</h3>
+                      <div className="preferences-grid">
+                        <div className="pref-item">
+                          <strong>Cuisine:</strong> {userData.preferences.cuisine || 'Not set'}
+                        </div>
+                        <div className="pref-item">
+                          <strong>Spice Level:</strong> {userData.preferences.spiceLevel || 'Not set'}
+                        </div>
+                        <div className="pref-item">
+                          <strong>Budget:</strong> {userData.preferences.budget || 'Not set'}
+                        </div>
+                        <div className="pref-item">
+                          <strong>Dietary:</strong> {userData.preferences.dietary || 'Not set'}
+                        </div>
+                        <div className="pref-item">
+                          <strong>Timing:</strong> {userData.preferences.timing || 'Not set'}
+                        </div>
+                        <div className="pref-item">
+                          <strong>Most Ordered:</strong> {userData.behaviorData.mostOrderedCuisine || 'Not enough data'}
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="order-summary">
-                <h3>Order Summary</h3>
-                {cart.map(item => (
-                  <div key={item._id} className="summary-item">
-                    <span>{item.name} x {item.quantity}</span>
-                    <span>Rs. {item.price * item.quantity}</span>
+                    {/* Recent Orders */}
+                    <div className="profile-section">
+                      <h3>📋 Recent Orders</h3>
+                      {userData.orderHistory.length > 0 ? (
+                        <div className="orders-list">
+                          {userData.orderHistory.slice(0, 5).map((order, index) => (
+                            <div key={order.id} className="order-item">
+                              <div className="order-info">
+                                <h4>{order.restaurantName}</h4>
+                                <p>{order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}</p>
+                                <div className="order-meta">
+                                  <span>Rs. {order.total}</span>
+                                  <span>{new Date(order.date).toLocaleDateString()}</span>
+                                  <span className={`status ${order.status}`}>{order.status}</span>
+                                </div>
+                              </div>
+                              <div className="order-actions">
+                                {order.rating ? (
+                                  <div className="existing-rating">
+                                    <span>{'⭐'.repeat(order.rating)}</span>
+                                    <span>Rated</span>
+                                  </div>
+                                ) : (
+                                  <button 
+                                    className="rate-btn"
+                                    onClick={() => handleRateOrder(order.id)}
+                                  >
+                                    Rate Order
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="no-orders">No orders yet. Start exploring restaurants!</p>
+                      )}
+                    </div>
+
+                    {/* Favorite Restaurants */}
+                    <div className="profile-section">
+                      <h3>❤️ Favorite Restaurants</h3>
+                      {userData.favorites.length > 0 ? (
+                        <div className="favorites-grid">
+                          {userData.favorites.map(favId => {
+                            const restaurant = restaurants.find(r => r._id === favId);
+                            return restaurant ? (
+                              <div key={favId} className="favorite-item">
+                                <h4>{restaurant.name}</h4>
+                                <p>{restaurant.cuisine?.join(', ')}</p>
+                                <div className="favorite-actions">
+                                  <button onClick={() => {
+                                    setShowUserProfile(false);
+                                    selectRestaurant(restaurant);
+                                  }}>View Menu</button>
+                                  <button 
+                                    className="remove-fav"
+                                    onClick={() => removeFromUserFavorites(currentUser.id, favId)}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      ) : (
+                        <p className="no-favorites">No favorites yet. Try some restaurants and add them!</p>
+                      )}
+                    </div>
+
+                    {/* Update Preferences Button */}
+                    <div className="profile-actions">
+                      <button 
+                        className="update-preferences-btn"
+                        onClick={() => {
+                          setShowUserProfile(false);
+                          setIsNewUser(true);
+                          setShowChat(true);
+                          startOnboarding();
+                        }}
+                      >
+                        🔄 Update Preferences
+                      </button>
+                    </div>
                   </div>
-                ))}
-                <div className="summary-total">
-                  <span>Subtotal:</span>
-                  <span>Rs. {calculateTotal().subtotal}</span>
-                </div>
-                <div className="summary-total">
-                  <span>Delivery Fee:</span>
-                  <span>Rs. {calculateTotal().deliveryFee}</span>
-                </div>
-                <div className="summary-total final">
-                  <span>Total:</span>
-                  <span>Rs. {calculateTotal().total}</span>
-                </div>
-              </div>
-
-              <div className="payment-method">
-                <h3>Payment Method</h3>
-                <div className="payment-option selected">
-                  <input type="radio" checked readOnly />
-                  <label>Cash on Delivery</label>
-                </div>
-              </div>
-
-              <button className="confirm-order-button" onClick={placeOrder}>
-                Confirm Order - Rs. {calculateTotal().total}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-     {/* Enhanced Order Tracking Modal */}
-{showOrderTracking && orderStatus && (
-  <div className="modal-overlay">
-    <div className="tracking-modal">
-      <div className="tracking-header">
-        <h2>Track Your Order</h2>
-        <button onClick={() => setShowOrderTracking(false)} className="close-button">✖</button>
-      </div>
-      
-      <div className="tracking-content">
-        <div className="order-info">
-          <h3>Order #{orderStatus.orderNumber}</h3>
-          <p>Estimated delivery: {orderStatus.estimatedDeliveryTime ? 
-            new Date(orderStatus.estimatedDeliveryTime).toLocaleTimeString() : '45 minutes'}</p>
-        </div>
-
-        <div className="tracking-steps">
-          <div className={`tracking-step ${currentOrderStatus === 'confirmed' ? 'active' : 'completed'}`}>
-            <div className="step-icon">✅</div>
-            <div className="step-info">
-              <h4>Order Confirmed</h4>
-              <p>Your order has been received</p>
-            </div>
-            <div className="step-time">2:30 PM</div>
-          </div>
-
-          <div className={`tracking-step ${currentOrderStatus === 'preparing' ? 'active' : currentOrderStatus === 'confirmed' ? 'pending' : 'completed'}`}>
-            <div className="step-icon">👨‍🍳</div>
-            <div className="step-info">
-              <h4>Preparing</h4>
-              <p>Restaurant is preparing your food</p>
-            </div>
-            <div className="step-time">{currentOrderStatus !== 'confirmed' ? '2:35 PM' : '--:--'}</div>
-          </div>
-
-          <div className={`tracking-step ${currentOrderStatus === 'on-the-way' ? 'active' : ['delivered'].includes(currentOrderStatus) ? 'completed' : 'pending'}`}>
-            <div className="step-icon">🚴</div>
-            <div className="step-info">
-              <h4>On the Way</h4>
-              <p>Your rider is on the way</p>
-            </div>
-            <div className="step-time">{['on-the-way', 'delivered'].includes(currentOrderStatus) ? '2:45 PM' : '--:--'}</div>
-          </div>
-
-          <div className={`tracking-step ${currentOrderStatus === 'delivered' ? 'completed' : 'pending'}`}>
-            <div className="step-icon">🎉</div>
-            <div className="step-info">
-              <h4>Delivered</h4>
-              <p>Enjoy your meal!</p>
-            </div>
-            <div className="step-time">{currentOrderStatus === 'delivered' ? '3:05 PM' : '--:--'}</div>
-          </div>
-        </div>
-
-        {currentOrderStatus === 'on-the-way' && (
-          <div className="rider-info">
-            <h3>Rider Details</h3>
-            <div className="rider-card">
-              <div className="rider-avatar">🏍️</div>
-              <div className="rider-details">
-                <h4>Muhammad Ali</h4>
-                <p>+92 321-1234567</p>
-                <div className="rider-rating">⭐ 4.8</div>
-              </div>
-              <button className="call-rider">📞 Call</button>
+                );
+              })()}
             </div>
           </div>
         )}
 
-        {currentOrderStatus === 'delivered' && (
-          <div className="delivery-complete">
-            <h3>🎉 Order Delivered Successfully!</h3>
-            <p>We hope you enjoy your meal!</p>
-            <button 
-              className="rate-order-btn"
-              onClick={handleRateFromTracking}
-            >
-              Rate Your Experience
-            </button>
+        {/* Rating Modal */}
+        {showRatingModal && selectedOrderForRating && (
+          <div className="modal-overlay" onClick={() => setShowRatingModal(false)}>
+            <div className="rating-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>⭐ Rate Your Order</h2>
+                <button onClick={() => setShowRatingModal(false)} className="close-button">✖</button>
+              </div>
+              
+              <div className="rating-content">
+                <div className="order-summary">
+                  <h3>{selectedOrderForRating.restaurantName}</h3>
+                  <div className="rated-items">
+                    {selectedOrderForRating.items && selectedOrderForRating.items.length > 0 ? (
+                      selectedOrderForRating.items.map((item, index) => (
+                        <p key={index}>{item.name} x{item.quantity}</p>
+                      ))
+                    ) : (
+                      <p>Order items</p>
+                    )}
+                  </div>
+                  <p className="order-total">Total: Rs. {selectedOrderForRating.total}</p>
+                  <small className="order-date">
+                    {selectedOrderForRating.date ? new Date(selectedOrderForRating.date).toLocaleDateString() : 'Today'}
+                  </small>
+                </div>
+
+                <div className="rating-section">
+                  <h4>How was your experience?</h4>
+                  <div className="star-rating">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        className={`star ${currentRating >= star ? 'active' : ''}`}
+                        onClick={() => setCurrentRating(star)}
+                      >
+                        ⭐
+                      </button>
+                    ))}
+                  </div>
+                  <p className="rating-text">
+                    {currentRating === 0 && 'Click to rate'}
+                    {currentRating === 1 && 'Poor - Not satisfied 😞'}
+                    {currentRating === 2 && 'Fair - Below expectations 😐'}
+                    {currentRating === 3 && 'Good - Satisfied 😊'}
+                    {currentRating === 4 && 'Very Good - Exceeded expectations 😄'}
+                    {currentRating === 5 && 'Excellent - Outstanding! 🤩'}
+                  </p>
+                </div>
+
+                <div className="feedback-section">
+                  <h4>Share your feedback (optional)</h4>
+                  <textarea
+                    value={currentFeedback}
+                    onChange={(e) => setCurrentFeedback(e.target.value)}
+                    placeholder="Tell us about your experience... Was the food good? How was the delivery? Any suggestions?"
+                    rows="4"
+                  />
+                </div>
+
+                <div className="rating-actions">
+                  <button 
+                    className="cancel-btn" 
+                    onClick={() => setShowRatingModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    className="submit-rating-btn" 
+                    onClick={submitRating}
+                    disabled={currentRating === 0}
+                  >
+                    Submit Rating {currentRating > 0 && `(${currentRating} ⭐)`}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        <div className="order-details">
-          <h3>Order Details</h3>
-          <p><strong>Restaurant:</strong> {orderStatus.restaurant?.name || selectedRestaurant?.name || 'Restaurant'}</p>
-          <p><strong>Total:</strong> Rs. {orderStatus.pricing?.total || 'N/A'}</p>
-          <p><strong>Payment:</strong> {orderStatus.paymentMethod || 'Cash on Delivery'}</p>
-          
-          {/* Show Dynamic Pricing Info if Available */}
-          {orderStatus.pricing?.surgeActive && (
-            <div className="order-pricing-info">
-              <p><strong>Pricing:</strong> Surge pricing was active ({orderStatus.pricing.pricingMultiplier}x)</p>
-              <small>Original delivery fee: Rs. {orderStatus.pricing.baseDeliveryFee || orderStatus.pricing.deliveryFee}</small>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-      {/* Auth Modal */}
-      {showAuth && (
-        <div className="modal-overlay" onClick={() => setShowAuth(false)}>
-          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="auth-header">
-              <h2>{isLogin ? 'Welcome Back!' : 'Create Account'}</h2>
-              <button onClick={() => setShowAuth(false)} className="close-button">✖</button>
-            </div>
-            
-            <form onSubmit={isLogin ? handleLogin : handleSignup} className="auth-form">
-              {!isLogin && (
+        {/* Checkout Modal */}
+        {showCheckout && (
+          <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
+            <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Complete Your Order</h2>
+                <button onClick={() => setShowCheckout(false)} className="close-button">✖</button>
+              </div>
+              
+              <div className="checkout-form">
+                <h3>Delivery Details</h3>
+                
                 <div className="form-group">
                   <label>Full Name</label>
                   <input
                     type="text"
-                    value={authForm.name}
-                    onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                    value={deliveryAddress.name}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, name: e.target.value})}
                     placeholder="Enter your name"
-                    required={!isLogin}
                   />
                 </div>
-              )}
-              
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={authForm.email}
-                  onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
-                  placeholder="your@email.com"
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Password</label>
-                <input
-                  type="password"
-                  value={authForm.password}
-                  onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              
-              {!isLogin && (
+
                 <div className="form-group">
                   <label>Phone Number</label>
                   <input
                     type="tel"
-                    value={authForm.phone}
-                    onChange={(e) => setAuthForm({...authForm, phone: e.target.value})}
+                    value={deliveryAddress.phone}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, phone: e.target.value})}
                     placeholder="03XX-XXXXXXX"
-                    required={!isLogin}
                   />
                 </div>
-              )}
-              
-              <button type="submit" className="auth-submit-button">
-                {isLogin ? 'Login' : 'Sign Up'}
-              </button>
-              
-              <div className="auth-switch">
-                {isLogin ? (
-                  <p>Don't have an account? <span onClick={() => setIsLogin(false)}>Sign up</span></p>
-                ) : (
-                  <p>Already have an account? <span onClick={() => setIsLogin(true)}>Login</span></p>
-                )}
+
+                <div className="form-group">
+                  <label>Area</label>
+                  <select
+                    value={deliveryAddress.area}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, area: e.target.value})}
+                  >
+                    <option value="">Select Area</option>
+                    <option value="Gulshan-e-Iqbal">Gulshan-e-Iqbal</option>
+                    <option value="DHA">DHA</option>
+                    <option value="Clifton">Clifton</option>
+                    <option value="PECHS">PECHS</option>
+                    <option value="Nazimabad">Nazimabad</option>
+                    <option value="FB Area">FB Area</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Street Address</label>
+                  <input
+                    type="text"
+                    value={deliveryAddress.street}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, street: e.target.value})}
+                    placeholder="House #, Street name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Delivery Instructions (Optional)</label>
+                  <textarea
+                    value={deliveryAddress.instructions}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, instructions: e.target.value})}
+                    placeholder="Gate code, landmark, etc."
+                    rows="3"
+                  />
+                </div>
+
+                <div className="order-summary">
+                  <h3>Order Summary</h3>
+                  {cart.map(item => (
+                    <div key={item._id} className="summary-item">
+                      <span>{item.name} x {item.quantity}</span>
+                      <span>Rs. {item.price * item.quantity}</span>
+                    </div>
+                  ))}
+                  <div className="summary-total">
+                    <span>Subtotal:</span>
+                    <span>Rs. {calculateTotal().subtotal}</span>
+                  </div>
+                  <div className="summary-total">
+                    <span>Delivery Fee:</span>
+                    <span>Rs. {calculateTotal().deliveryFee}</span>
+                  </div>
+                  <div className="summary-total final">
+                    <span>Total:</span>
+                    <span>Rs. {calculateTotal().total}</span>
+                  </div>
+                </div>
+
+                <div className="payment-method">
+                  <h3>Payment Method</h3>
+                  <div className="payment-option selected">
+                    <input type="radio" checked readOnly />
+                    <label>Cash on Delivery</label>
+                  </div>
+                </div>
+
+                <button className="confirm-order-button" onClick={placeOrder}>
+                  Confirm Order - Rs. {calculateTotal().total}
+                </button>
               </div>
-            </form>
-            
-            <div className="auth-divider">OR</div>
-            
-            <div className="social-auth">
-              <button className="social-button google">
-                <img src="https://www.google.com/favicon.ico" alt="Google" />
-                Continue with Google
-              </button>
-              <button className="social-button facebook">
-                <img src="https://www.facebook.com/favicon.ico" alt="Facebook" />
-                Continue with Facebook
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Enhanced Order Tracking Modal */}
+        {showOrderTracking && orderStatus && (
+          <div className="modal-overlay">
+            <div className="tracking-modal">
+              <div className="tracking-header">
+                <h2>Track Your Order</h2>
+                <button onClick={() => setShowOrderTracking(false)} className="close-button">✖</button>
+              </div>
+              
+              <div className="tracking-content">
+                <div className="order-info">
+                  <h3>Order #{orderStatus.orderNumber}</h3>
+                  <p>Estimated delivery: {orderStatus.estimatedDeliveryTime ? 
+                    new Date(orderStatus.estimatedDeliveryTime).toLocaleTimeString() : '45 minutes'}</p>
+                </div>
+
+                <div className="tracking-steps">
+                  <div className={`tracking-step ${currentOrderStatus === 'confirmed' ? 'active' : 'completed'}`}>
+                    <div className="step-icon">✅</div>
+                    <div className="step-info">
+                      <h4>Order Confirmed</h4>
+                      <p>Your order has been received</p>
+                    </div>
+                    <div className="step-time">2:30 PM</div>
+                  </div>
+
+                  <div className={`tracking-step ${currentOrderStatus === 'preparing' ? 'active' : currentOrderStatus === 'confirmed' ? 'pending' : 'completed'}`}>
+                    <div className="step-icon">👨‍🍳</div>
+                    <div className="step-info">
+                      <h4>Preparing</h4>
+                      <p>Restaurant is preparing your food</p>
+                    </div>
+                    <div className="step-time">{currentOrderStatus !== 'confirmed' ? '2:35 PM' : '--:--'}</div>
+                  </div>
+
+                  <div className={`tracking-step ${currentOrderStatus === 'on-the-way' ? 'active' : ['delivered'].includes(currentOrderStatus) ? 'completed' : 'pending'}`}>
+                    <div className="step-icon">🚴</div>
+                    <div className="step-info">
+                      <h4>On the Way</h4>
+                      <p>Your rider is on the way</p>
+                    </div>
+                    <div className="step-time">{['on-the-way', 'delivered'].includes(currentOrderStatus) ? '2:45 PM' : '--:--'}</div>
+                  </div>
+
+                  <div className={`tracking-step ${currentOrderStatus === 'delivered' ? 'completed' : 'pending'}`}>
+                    <div className="step-icon">🎉</div>
+                    <div className="step-info">
+                      <h4>Delivered</h4>
+                      <p>Enjoy your meal!</p>
+                    </div>
+                    <div className="step-time">{currentOrderStatus === 'delivered' ? '3:05 PM' : '--:--'}</div>
+                  </div>
+                </div>
+
+                {currentOrderStatus === 'on-the-way' && (
+                  <div className="rider-info">
+                    <h3>Rider Details</h3>
+                    <div className="rider-card">
+                      <div className="rider-avatar">🏍️</div>
+                      <div className="rider-details">
+                        <h4>Muhammad Ali</h4>
+                        <p>+92 321-1234567</p>
+                        <div className="rider-rating">⭐ 4.8</div>
+                      </div>
+                      <button className="call-rider">📞 Call</button>
+                    </div>
+                  </div>
+                )}
+
+                {currentOrderStatus === 'delivered' && (
+                  <div className="delivery-complete">
+                    <h3>🎉 Order Delivered Successfully!</h3>
+                    <p>We hope you enjoy your meal!</p>
+                    <button 
+                      className="rate-order-btn"
+                      onClick={handleRateFromTracking}
+                    >
+                      Rate Your Experience
+                    </button>
+                  </div>
+                )}
+
+                <div className="order-details">
+                  <h3>Order Details</h3>
+                  <p><strong>Restaurant:</strong> {orderStatus.restaurant?.name || selectedRestaurant?.name || 'Restaurant'}</p>
+                  <p><strong>Total:</strong> Rs. {orderStatus.pricing?.total || 'N/A'}</p>
+                  <p><strong>Payment:</strong> {orderStatus.paymentMethod || 'Cash on Delivery'}</p>
+                  
+                  {/* Show Dynamic Pricing Info if Available */}
+                  {orderStatus.pricing?.surgeActive && (
+                    <div className="order-pricing-info">
+                      <p><strong>Pricing:</strong> Surge pricing was active ({orderStatus.pricing.pricingMultiplier}x)</p>
+                      <small>Original delivery fee: Rs. {orderStatus.pricing.baseDeliveryFee || orderStatus.pricing.deliveryFee}</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Auth Modal */}
+        {showAuth && (
+          <div className="modal-overlay" onClick={() => setShowAuth(false)}>
+            <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="auth-header">
+                <h2>{isLogin ? 'Welcome Back!' : 'Create Account'}</h2>
+                <button onClick={() => setShowAuth(false)} className="close-button">✖</button>
+              </div>
+              
+              <form onSubmit={isLogin ? handleLogin : handleSignup} className="auth-form">
+                {!isLogin && (
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input
+                      type="text"
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                      placeholder="Enter your name"
+                      required={!isLogin}
+                    />
+                  </div>
+                )}
+                
+                <div className="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={authForm.email}
+                    onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                    placeholder="your@email.com"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                
+                {!isLogin && (
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input
+                      type="tel"
+                      value={authForm.phone}
+                      onChange={(e) => setAuthForm({...authForm, phone: e.target.value})}
+                      placeholder="03XX-XXXXXXX"
+                      required={!isLogin}
+                    />
+                  </div>
+                )}
+                
+                <button type="submit" className="auth-submit-button">
+                  {isLogin ? 'Login' : 'Sign Up'}
+                </button>
+                
+                <div className="auth-switch">
+                  {isLogin ? (
+                    <p>Don't have an account? <span onClick={() => setIsLogin(false)}>Sign up</span></p>
+                  ) : (
+                    <p>Already have an account? <span onClick={() => setIsLogin(true)}>Login</span></p>
+                  )}
+                </div>
+              </form>
+              
+              <div className="auth-divider">OR</div>
+              
+              <div className="social-auth">
+                <button className="social-button google">
+                  <img src="https://www.google.com/favicon.ico" alt="Google" />
+                  Continue with Google
+                </button>
+                <button className="social-button facebook">
+                  <img src="https://www.facebook.com/favicon.ico" alt="Facebook" />
+                  Continue with Facebook
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
