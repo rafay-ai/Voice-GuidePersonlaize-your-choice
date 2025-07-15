@@ -750,6 +750,43 @@ function App() {
     sendMessage();
   };
 
+  const handleRateFromTracking = () => {
+  if (orderStatus && currentUser) {
+    // Create a proper order object for rating
+    const orderForRating = {
+      id: orderStatus._id || orderStatus.orderNumber || `order_${Date.now()}`,
+      restaurantId: orderStatus.restaurant?._id || orderStatus.restaurant || selectedRestaurant?._id,
+      restaurantName: orderStatus.restaurant?.name || selectedRestaurant?.name || 'Restaurant',
+      items: orderStatus.items?.map(item => ({
+        name: item.menuItem?.name || item.name || 'Item',
+        quantity: item.quantity || 1,
+        price: item.price || 0
+      })) || cart.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      total: orderStatus.pricing?.total || calculateTotal().total,
+      status: 'delivered',
+      date: new Date().toISOString(),
+      rating: null,
+      feedback: null
+    };
+    
+    console.log('Setting up rating for order:', orderForRating);
+    
+    // Set up rating modal
+    setSelectedOrderForRating(orderForRating);
+    setCurrentRating(0);
+    setCurrentFeedback('');
+    setShowRatingModal(true);
+    setShowOrderTracking(false); // Close tracking modal
+  } else {
+    console.log('Cannot rate: missing orderStatus or currentUser');
+    alert('Unable to load rating. Please try again.');
+  }
+};
+
   // ===== USER PROFILE FUNCTIONS =====
   const handleRateOrder = (orderId) => {
     const userData = getUserData(currentUser.id);
@@ -761,15 +798,35 @@ function App() {
   };
 
   const submitRating = () => {
-    if (selectedOrderForRating && currentRating > 0) {
-      addUserRating(currentUser.id, selectedOrderForRating.id, currentRating, currentFeedback);
-      setShowRatingModal(false);
-      setSelectedOrderForRating(null);
-      setCurrentRating(0);
-      setCurrentFeedback('');
-      alert('Thank you for your feedback!');
-    }
-  };
+  if (selectedOrderForRating && currentRating > 0) {
+    // Add rating to user data
+    addUserRating(currentUser.id, selectedOrderForRating.id, currentRating, currentFeedback);
+    
+    // Save to order history as well
+    addToUserOrderHistory(currentUser.id, {
+      ...selectedOrderForRating,
+      rating: currentRating,
+      feedback: currentFeedback
+    }, restaurants);
+    
+    // Close modal and reset
+    setShowRatingModal(false);
+    setSelectedOrderForRating(null);
+    setCurrentRating(0);
+    setCurrentFeedback('');
+    
+    // Show success message
+    alert('Thank you for your feedback! Your rating helps us improve our service. 🌟');
+    
+    console.log('Rating submitted:', {
+      orderId: selectedOrderForRating.id,
+      rating: currentRating,
+      feedback: currentFeedback
+    });
+  } else {
+    alert('Please select a rating before submitting.');
+  }
+};
 
   const toggleFavorite = (restaurantId) => {
     if (!currentUser) {
@@ -1500,69 +1557,83 @@ function App() {
 
       {/* Rating Modal */}
       {showRatingModal && selectedOrderForRating && (
-        <div className="modal-overlay" onClick={() => setShowRatingModal(false)}>
-          <div className="rating-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>⭐ Rate Your Order</h2>
-              <button onClick={() => setShowRatingModal(false)} className="close-button">✖</button>
-            </div>
-            
-            <div className="rating-content">
-              <div className="order-summary">
-                <h3>{selectedOrderForRating.restaurantName}</h3>
-                <p>{selectedOrderForRating.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}</p>
-                <p className="order-total">Total: Rs. {selectedOrderForRating.total}</p>
-              </div>
-
-              <div className="rating-section">
-                <h4>How was your experience?</h4>
-                <div className="star-rating">
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <button
-                      key={star}
-                      className={`star ${currentRating >= star ? 'active' : ''}`}
-                      onClick={() => setCurrentRating(star)}
-                    >
-                      ⭐
-                    </button>
-                  ))}
-                </div>
-                <p className="rating-text">
-                  {currentRating === 0 && 'Click to rate'}
-                  {currentRating === 1 && 'Poor'}
-                  {currentRating === 2 && 'Fair'}
-                  {currentRating === 3 && 'Good'}
-                  {currentRating === 4 && 'Very Good'}
-                  {currentRating === 5 && 'Excellent'}
-                </p>
-              </div>
-
-              <div className="feedback-section">
-                <h4>Share your feedback (optional)</h4>
-                <textarea
-                  value={currentFeedback}
-                  onChange={(e) => setCurrentFeedback(e.target.value)}
-                  placeholder="Tell us about your experience..."
-                  rows="4"
-                />
-              </div>
-
-              <div className="rating-actions">
-                <button className="cancel-btn" onClick={() => setShowRatingModal(false)}>
-                  Cancel
-                </button>
-                <button 
-                  className="submit-rating-btn" 
-                  onClick={submitRating}
-                  disabled={currentRating === 0}
-                >
-                  Submit Rating
-                </button>
-              </div>
-            </div>
+  <div className="modal-overlay" onClick={() => setShowRatingModal(false)}>
+    <div className="rating-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-header">
+        <h2>⭐ Rate Your Order</h2>
+        <button onClick={() => setShowRatingModal(false)} className="close-button">✖</button>
+      </div>
+      
+      <div className="rating-content">
+        <div className="order-summary">
+          <h3>{selectedOrderForRating.restaurantName}</h3>
+          <div className="rated-items">
+            {selectedOrderForRating.items && selectedOrderForRating.items.length > 0 ? (
+              selectedOrderForRating.items.map((item, index) => (
+                <p key={index}>{item.name} x{item.quantity}</p>
+              ))
+            ) : (
+              <p>Order items</p>
+            )}
           </div>
+          <p className="order-total">Total: Rs. {selectedOrderForRating.total}</p>
+          <small className="order-date">
+            {selectedOrderForRating.date ? new Date(selectedOrderForRating.date).toLocaleDateString() : 'Today'}
+          </small>
         </div>
-      )}
+
+        <div className="rating-section">
+          <h4>How was your experience?</h4>
+          <div className="star-rating">
+            {[1, 2, 3, 4, 5].map(star => (
+              <button
+                key={star}
+                className={`star ${currentRating >= star ? 'active' : ''}`}
+                onClick={() => setCurrentRating(star)}
+              >
+                ⭐
+              </button>
+            ))}
+          </div>
+          <p className="rating-text">
+            {currentRating === 0 && 'Click to rate'}
+            {currentRating === 1 && 'Poor - Not satisfied 😞'}
+            {currentRating === 2 && 'Fair - Below expectations 😐'}
+            {currentRating === 3 && 'Good - Satisfied 😊'}
+            {currentRating === 4 && 'Very Good - Exceeded expectations 😄'}
+            {currentRating === 5 && 'Excellent - Outstanding! 🤩'}
+          </p>
+        </div>
+
+        <div className="feedback-section">
+          <h4>Share your feedback (optional)</h4>
+          <textarea
+            value={currentFeedback}
+            onChange={(e) => setCurrentFeedback(e.target.value)}
+            placeholder="Tell us about your experience... Was the food good? How was the delivery? Any suggestions?"
+            rows="4"
+          />
+        </div>
+
+        <div className="rating-actions">
+          <button 
+            className="cancel-btn" 
+            onClick={() => setShowRatingModal(false)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="submit-rating-btn" 
+            onClick={submitRating}
+            disabled={currentRating === 0}
+          >
+            Submit Rating {currentRating > 0 && `(${currentRating} ⭐)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Checkout Modal */}
       {showCheckout && (
@@ -1670,92 +1741,106 @@ function App() {
         </div>
       )}
 
-      {/* Order Tracking Modal */}
-      {showOrderTracking && orderStatus && (
-        <div className="modal-overlay">
-          <div className="tracking-modal">
-            <div className="tracking-header">
-              <h2>Track Your Order</h2>
-              <button onClick={() => setShowOrderTracking(false)} className="close-button">✖</button>
+     {/* Enhanced Order Tracking Modal */}
+{showOrderTracking && orderStatus && (
+  <div className="modal-overlay">
+    <div className="tracking-modal">
+      <div className="tracking-header">
+        <h2>Track Your Order</h2>
+        <button onClick={() => setShowOrderTracking(false)} className="close-button">✖</button>
+      </div>
+      
+      <div className="tracking-content">
+        <div className="order-info">
+          <h3>Order #{orderStatus.orderNumber}</h3>
+          <p>Estimated delivery: {orderStatus.estimatedDeliveryTime ? 
+            new Date(orderStatus.estimatedDeliveryTime).toLocaleTimeString() : '45 minutes'}</p>
+        </div>
+
+        <div className="tracking-steps">
+          <div className={`tracking-step ${currentOrderStatus === 'confirmed' ? 'active' : 'completed'}`}>
+            <div className="step-icon">✅</div>
+            <div className="step-info">
+              <h4>Order Confirmed</h4>
+              <p>Your order has been received</p>
             </div>
-            
-            <div className="tracking-content">
-              <div className="order-info">
-                <h3>Order #{orderStatus.orderNumber}</h3>
-                <p>Estimated delivery: {orderStatus.estimatedDeliveryTime}</p>
-              </div>
+            <div className="step-time">2:30 PM</div>
+          </div>
 
-              <div className="tracking-steps">
-                <div className={`tracking-step ${currentOrderStatus === 'confirmed' ? 'active' : 'completed'}`}>
-                  <div className="step-icon">✅</div>
-                  <div className="step-info">
-                    <h4>Order Confirmed</h4>
-                    <p>Your order has been received</p>
-                  </div>
-                  <div className="step-time">2:30 PM</div>
-                </div>
-
-                <div className={`tracking-step ${currentOrderStatus === 'preparing' ? 'active' : currentOrderStatus === 'confirmed' ? 'pending' : 'completed'}`}>
-                  <div className="step-icon">👨‍🍳</div>
-                  <div className="step-info">
-                    <h4>Preparing</h4>
-                    <p>Restaurant is preparing your food</p>
-                  </div>
-                  <div className="step-time">{currentOrderStatus !== 'confirmed' ? '2:35 PM' : '--:--'}</div>
-                </div>
-
-                <div className={`tracking-step ${currentOrderStatus === 'on-the-way' ? 'active' : ['delivered'].includes(currentOrderStatus) ? 'completed' : 'pending'}`}>
-                  <div className="step-icon">🚴</div>
-                  <div className="step-info">
-                    <h4>On the Way</h4>
-                    <p>Your rider is on the way</p>
-                  </div>
-                  <div className="step-time">{['on-the-way', 'delivered'].includes(currentOrderStatus) ? '2:45 PM' : '--:--'}</div>
-                </div>
-
-                <div className={`tracking-step ${currentOrderStatus === 'delivered' ? 'completed' : 'pending'}`}>
-                  <div className="step-icon">🎉</div>
-                  <div className="step-info">
-                    <h4>Delivered</h4>
-                    <p>Enjoy your meal!</p>
-                  </div>
-                  <div className="step-time">{currentOrderStatus === 'delivered' ? '3:05 PM' : '--:--'}</div>
-                </div>
-              </div>
-
-              {currentOrderStatus === 'on-the-way' && (
-                <div className="rider-info">
-                  <h3>Rider Details</h3>
-                  <div className="rider-card">
-                    <div className="rider-avatar">🏍️</div>
-                    <div className="rider-details">
-                      <h4>Muhammad Ali</h4>
-                      <p>+92 321-1234567</p>
-                      <div className="rider-rating">⭐ 4.8</div>
-                    </div>
-                    <button className="call-rider">📞 Call</button>
-                  </div>
-                </div>
-              )}
-
-              {currentOrderStatus === 'delivered' && (
-                <div className="delivery-complete">
-                  <h3>🎉 Order Delivered Successfully!</h3>
-                  <p>We hope you enjoy your meal!</p>
-                  <button className="rate-order-btn">Rate Your Experience</button>
-                </div>
-              )}
-
-              <div className="order-details">
-                <h3>Order Details</h3>
-                <p><strong>Restaurant:</strong> {selectedRestaurant?.name || 'Restaurant'}</p>
-                <p><strong>Total:</strong> Rs. {orderStatus.pricing?.total || 'N/A'}</p>
-                <p><strong>Payment:</strong> {orderStatus.paymentMethod}</p>
-              </div>
+          <div className={`tracking-step ${currentOrderStatus === 'preparing' ? 'active' : currentOrderStatus === 'confirmed' ? 'pending' : 'completed'}`}>
+            <div className="step-icon">👨‍🍳</div>
+            <div className="step-info">
+              <h4>Preparing</h4>
+              <p>Restaurant is preparing your food</p>
             </div>
+            <div className="step-time">{currentOrderStatus !== 'confirmed' ? '2:35 PM' : '--:--'}</div>
+          </div>
+
+          <div className={`tracking-step ${currentOrderStatus === 'on-the-way' ? 'active' : ['delivered'].includes(currentOrderStatus) ? 'completed' : 'pending'}`}>
+            <div className="step-icon">🚴</div>
+            <div className="step-info">
+              <h4>On the Way</h4>
+              <p>Your rider is on the way</p>
+            </div>
+            <div className="step-time">{['on-the-way', 'delivered'].includes(currentOrderStatus) ? '2:45 PM' : '--:--'}</div>
+          </div>
+
+          <div className={`tracking-step ${currentOrderStatus === 'delivered' ? 'completed' : 'pending'}`}>
+            <div className="step-icon">🎉</div>
+            <div className="step-info">
+              <h4>Delivered</h4>
+              <p>Enjoy your meal!</p>
+            </div>
+            <div className="step-time">{currentOrderStatus === 'delivered' ? '3:05 PM' : '--:--'}</div>
           </div>
         </div>
-      )}
+
+        {currentOrderStatus === 'on-the-way' && (
+          <div className="rider-info">
+            <h3>Rider Details</h3>
+            <div className="rider-card">
+              <div className="rider-avatar">🏍️</div>
+              <div className="rider-details">
+                <h4>Muhammad Ali</h4>
+                <p>+92 321-1234567</p>
+                <div className="rider-rating">⭐ 4.8</div>
+              </div>
+              <button className="call-rider">📞 Call</button>
+            </div>
+          </div>
+        )}
+
+        {currentOrderStatus === 'delivered' && (
+          <div className="delivery-complete">
+            <h3>🎉 Order Delivered Successfully!</h3>
+            <p>We hope you enjoy your meal!</p>
+            <button 
+              className="rate-order-btn"
+              onClick={handleRateFromTracking}
+            >
+              Rate Your Experience
+            </button>
+          </div>
+        )}
+
+        <div className="order-details">
+          <h3>Order Details</h3>
+          <p><strong>Restaurant:</strong> {orderStatus.restaurant?.name || selectedRestaurant?.name || 'Restaurant'}</p>
+          <p><strong>Total:</strong> Rs. {orderStatus.pricing?.total || 'N/A'}</p>
+          <p><strong>Payment:</strong> {orderStatus.paymentMethod || 'Cash on Delivery'}</p>
+          
+          {/* Show Dynamic Pricing Info if Available */}
+          {orderStatus.pricing?.surgeActive && (
+            <div className="order-pricing-info">
+              <p><strong>Pricing:</strong> Surge pricing was active ({orderStatus.pricing.pricingMultiplier}x)</p>
+              <small>Original delivery fee: Rs. {orderStatus.pricing.baseDeliveryFee || orderStatus.pricing.deliveryFee}</small>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Auth Modal */}
       {showAuth && (
