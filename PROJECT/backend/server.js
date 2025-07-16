@@ -11,7 +11,9 @@ const Order = require('./models/Order');
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
 const { DynamicPricingEngine } = require('./services/dynamicPricing');
+const EnhancedChatbotService = require('./services/enhancedChatbot'); // FIXED: No destructuring
 const pricingEngine = new DynamicPricingEngine();
+const enhancedChatbot = new EnhancedChatbotService();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -438,7 +440,9 @@ app.get('/api/orders/:userId', async (req, res) => {
 
 // =============== CHAT ROUTE ===============
 app.post('/api/chat', async (req, res) => {
-    const { message, userId, isOnboarding } = req.body;
+    const { message, userId, sessionData } = req.body;
+    
+    console.log('💬 Enhanced chat request:', { message, userId });
     
     if (!message) {
         return res.status(400).json({
@@ -448,80 +452,90 @@ app.post('/api/chat', async (req, res) => {
     }
     
     try {
-        // Get data for chatbot
-        const restaurants = await Restaurant.find({ isActive: true });
-        const menuItems = await MenuItem.find({ isAvailable: true });
+        // Use the enhanced chatbot service
+        const chatbotResponse = await enhancedChatbot.getChatbotResponse(message, userId, sessionData);
         
-        let userPreferences = null;
-        let orderHistory = [];
-        
-        if (userId && userId !== 'guest') {
-            const user = await User.findById(userId);
-            if (user) {
-                userPreferences = user.preferences;
-                orderHistory = await Order.find({ user: userId }).populate('restaurant');
-            }
-        }
-        
-        // Convert to format expected by chatbot
-        const restaurantData = { restaurants: restaurants };
-        const menuData = { menu_items: menuItems };
-        const orderData = { orders: orderHistory };
-        const userPrefData = userPreferences ? { user_preferences: [userPreferences] } : { user_preferences: [] };
-        
-        const chatbotData = await getChatbotResponse(
-            message,
-            userId || 'guest',
-            restaurantData.restaurants,
-            menuData.menu_items,
-            orderData,
-            userPrefData
-        );
+        console.log('🤖 Enhanced chatbot response:', chatbotResponse.type);
         
         res.json({
             success: true,
             user_message: message,
-            bot_response: chatbotData.response,
-            recommendations: chatbotData.recommendations,
-            user_context: chatbotData.context,
-            needsOnboarding: chatbotData.needsOnboarding,
-            needsConfirmation: chatbotData.needsConfirmation,
-            orderIntent: chatbotData.orderIntent,
-            orderPlaced: chatbotData.orderPlaced,
-            orderDetails: chatbotData.orderDetails
+            bot_response: chatbotResponse.message,
+            response_type: chatbotResponse.type,
+            data: chatbotResponse,
+            timestamp: new Date().toISOString()
         });
         
     } catch (error) {
-        console.error('Chat error:', error);
+        console.error('Enhanced chat error:', error);
         
-        // Fallback response
-        const lowerMessage = message.toLowerCase();
-        let response = '';
-        let recommendations = [];
-        
-        if (lowerMessage.includes('biryani')) {
-            const biryaniRestaurants = await Restaurant.find({
-                isActive: true,
-                $or: [
-                    { cuisine: { $regex: 'biryani', $options: 'i' } },
-                    { name: { $regex: 'biryani', $options: 'i' } }
-                ]
-            });
-            recommendations = biryaniRestaurants;
-            response = "Here are great biryani options! Student Biryani is highly recommended for authentic taste.";
-        } else {
-            response = "I'm here to help you order delicious food! You can ask me about restaurant recommendations, specific cuisines, or how to place an order. What sounds good to you today?";
-        }
-        
+        // Fallback to basic response
         res.json({
             success: true,
             user_message: message,
-            bot_response: response,
-            recommendations: recommendations
+            bot_response: "I'm here to help you order delicious food! What would you like to eat today? 🍕",
+            response_type: 'fallback',
+            data: {
+                type: 'general',
+                suggestions: ['Order food', 'Show restaurants', 'My orders', 'Help']
+            }
         });
     }
 });
 
+// Add new endpoint for order actions
+app.post('/api/chat/order-action', async (req, res) => {
+    const { action, userId, orderData } = req.body;
+    
+    try {
+        let response;
+        
+        switch (action) {
+            case 'confirm_reorder':
+                response = await enhancedChatbot.confirmReorder(userId, orderData);
+                break;
+            case 'modify_cart':
+                response = await enhancedChatbot.modifyCart(userId, orderData);
+                break;
+            case 'place_order':
+                response = await enhancedChatbot.finalizeOrder(userId, orderData);
+                break;
+            default:
+                response = { message: 'Unknown action', type: 'error' };
+        }
+        
+        res.json({
+            success: true,
+            action,
+            response
+        });
+    } catch (error) {
+        console.error('Order action error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error processing order action',
+            error: error.message
+        });
+    }
+});
+
+// Add endpoint for quick suggestions
+app.get('/api/chat/suggestions/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const suggestions = await enhancedChatbot.getPersonalizedSuggestions(userId);
+        
+        res.json({
+            success: true,
+            suggestions
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error getting suggestions'
+        });
+    }
+});
 // =============== SEARCH ROUTE ===============
 app.get('/api/search', async (req, res) => {
     try {

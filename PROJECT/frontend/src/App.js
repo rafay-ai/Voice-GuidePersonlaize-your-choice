@@ -620,22 +620,22 @@ function App() {
     e.preventDefault();
     
     if (authForm.email === 'admin@food.pk' && authForm.password === 'admin123') {
-      const adminUser = {
-        id: 'admin',
-        name: 'Admin',
-        email: authForm.email,
-        isAdmin: true
-      };
-      
-      setCurrentUser(adminUser);
-      localStorage.setItem('currentUser', JSON.stringify(adminUser));
-      setShowAuth(false);
-      setShowAdminDashboard(true);
-      alert('Welcome Admin!');
-      
-      setAuthForm({ name: '', email: '', password: '', phone: '' });
-      return;
-    }
+  const adminUser = {
+    id: '6870b084e75152da7d6afb69', // Valid ObjectId format
+    name: 'Admin',
+    email: authForm.email,
+    isAdmin: true
+  };
+  
+  setCurrentUser(adminUser);
+  localStorage.setItem('currentUser', JSON.stringify(adminUser));
+  setShowAuth(false);
+  setShowAdminDashboard(true);
+  alert('Welcome Admin!');
+  
+  setAuthForm({ name: '', email: '', password: '', phone: '' });
+  return;
+}
     
     if (authForm.email && authForm.password) {
       const user = {
@@ -821,25 +821,328 @@ function App() {
   };
 
   const sendMessage = async () => {
-    if (!inputMessage.trim()) return;
+  if (!inputMessage.trim()) return;
 
-    const userMsg = {
-      role: 'user',
-      content: inputMessage,
+  const userMsg = {
+    role: 'user',
+    content: inputMessage,
+    timestamp: new Date().toLocaleTimeString()
+  };
+  
+  setMessages(prev => [...prev, userMsg]);
+  setInputMessage('');
+  setIsTyping(true);
+
+  try {
+    const response = await fetch('http://localhost:5000/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: inputMessage,
+        userId: currentUser?.id || 'guest',
+        sessionData: {
+          currentCart: cart,
+          selectedRestaurant: selectedRestaurant
+        }
+      })
+    });
+
+    const data = await response.json();
+    console.log('🤖 Enhanced chatbot response:', data);
+
+    setIsTyping(false);
+    
+    if (data.success) {
+      const botResponse = {
+        role: 'bot',
+        content: data.bot_response,
+        timestamp: new Date().toLocaleTimeString(),
+        type: data.response_type,
+        data: data.data
+      };
+      
+      setMessages(prev => [...prev, botResponse]);
+      
+      // Handle special response types
+      handleSpecialChatResponse(data.data);
+    }
+  } catch (error) {
+    console.error('Chat error:', error);
+    setIsTyping(false);
+    
+    const errorResponse = {
+      role: 'bot',
+      content: "Sorry, I'm having trouble right now. Please try again! 😔",
       timestamp: new Date().toLocaleTimeString()
     };
+    setMessages(prev => [...prev, errorResponse]);
+  }
+};
+
+// 2. Add function to handle special chat responses
+const handleSpecialChatResponse = (responseData) => {
+  switch (responseData.type) {
+    case 'reorder_confirmation':
+      // Auto-fill cart with reorder items
+      if (responseData.orderData) {
+        setSelectedRestaurant(responseData.orderData.restaurant);
+        setCart(responseData.orderData.items.map(item => ({
+          ...item.menuItem,
+          quantity: item.quantity
+        })));
+      }
+      break;
+      
+    case 'quick_recommendations':
+      // Show restaurant cards in chat
+      break;
+      
+    case 'menu_display':
+      // Show menu items
+      if (responseData.restaurant) {
+        setSelectedRestaurant(responseData.restaurant);
+      }
+      break;
+      
+    case 'cart_update':
+      // Update cart state
+      if (responseData.cart) {
+        setCart(responseData.cart.map(item => ({
+          ...item.menuItem,
+          quantity: item.quantity
+        })));
+      }
+      break;
+      
+    case 'order_confirmation':
+      // Show order summary
+      if (responseData.orderSummary) {
+        setShowCheckout(true);
+        // Pre-fill checkout data
+        setDeliveryAddress({
+          name: currentUser?.name || '',
+          phone: responseData.orderSummary.address.phone || '',
+          area: responseData.orderSummary.address.area || '',
+          street: responseData.orderSummary.address.street || '',
+          instructions: ''
+        });
+      }
+      break;
+      
+    case 'order_success':
+      // Handle successful order
+      if (responseData.order) {
+        setOrderStatus(responseData.order);
+        setCart([]);
+        setShowCheckout(false);
+        setShowOrderTracking(true);
+        
+        // Add order to user history
+        addToUserOrderHistory(currentUser.id, {
+          id: responseData.order.orderNumber,
+          restaurantId: responseData.order.restaurant,
+          restaurantName: selectedRestaurant?.name || 'Restaurant',
+          items: responseData.order.items,
+          total: responseData.order.pricing.total,
+          status: 'confirmed'
+        }, restaurants);
+      }
+      break;
+  }
+};
+
+
+const renderChatMessage = (msg, index) => {
+  return (
+    <div key={index} className="message-container">
+      <div className={`message ${msg.role}`}>
+        <div className="message-content">
+          {msg.content}
+        </div>
+        <div className="message-time">{msg.timestamp}</div>
+      </div>
+
+      {/* Enhanced message content */}
+      {msg.data && renderEnhancedMessageContent(msg.data)}
+    </div>
+  );
+};
+
+// 4. Add function to render enhanced message content
+const renderEnhancedMessageContent = (data) => {
+  switch (data.type) {
+    case 'reorder_confirmation':
+      return (
+        <div className="chat-order-confirmation">
+          <div className="reorder-summary">
+            <h4>Reorder from {data.orderData.restaurant.name}</h4>
+            <div className="reorder-items">
+              {data.orderData.items.map((item, idx) => (
+                <div key={idx} className="reorder-item">
+                  {item.menuItem.name} x{item.quantity} - Rs. {item.price * item.quantity}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="reorder-actions">
+            <button 
+              className="action-btn confirm"
+              onClick={() => handleChatOrderAction('confirm_reorder', data.orderData)}
+            >
+              ✅ Confirm Reorder
+            </button>
+            <button 
+              className="action-btn modify"
+              onClick={() => handleChatOrderAction('modify_order', data.orderData)}
+            >
+              ✏️ Modify Order
+            </button>
+          </div>
+        </div>
+      );
+
+    case 'quick_recommendations':
+    case 'menu_display':
+      return (
+        <div className="chat-recommendations">
+          {data.restaurants?.map((restaurant, idx) => (
+            <div 
+              key={idx} 
+              className="recommendation-card"
+              onClick={() => selectRestaurant(restaurant)}
+            >
+              <div className="rec-header">
+                <h4>{restaurant.name}</h4>
+                <div className="rec-rating">⭐ {restaurant.rating}</div>
+              </div>
+              <p className="rec-cuisine">{restaurant.cuisine?.join(', ')}</p>
+              <div className="rec-info">
+                <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
+                <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
+              </div>
+            </div>
+          ))}
+          
+          {data.menuItems?.map((item, idx) => (
+            <div 
+              key={idx} 
+              className="menu-item-card"
+              onClick={() => addToCart(item)}
+            >
+              <div className="menu-item-info">
+                <h4>{item.name}</h4>
+                <p>{item.description}</p>
+                <span className="price">Rs. {item.price}</span>
+              </div>
+              <button className="add-to-cart-btn">Add +</button>
+            </div>
+          ))}
+        </div>
+      );
+
+    case 'cart_update':
+      return (
+        <div className="chat-cart-summary">
+          <h4>🛒 Your Cart</h4>
+          {data.cart?.map((item, idx) => (
+            <div key={idx} className="cart-item-summary">
+              {item.menuItem.name} x{item.quantity} - Rs. {item.price * item.quantity}
+            </div>
+          ))}
+          <div className="cart-total">Total: Rs. {data.total}</div>
+        </div>
+      );
+
+    case 'address_collection':
+      return (
+        <div className="chat-address-form">
+          <div className="address-fields">
+            {data.fields?.map(field => (
+              <input
+                key={field}
+                type="text"
+                placeholder={`Enter ${field}`}
+                className="chat-input-field"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = e.target.value;
+                    handleQuickReply(`${field}: ${value}`);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      );
+
+    case 'order_success':
+      return (
+        <div className="chat-order-success">
+          <div className="success-animation">🎉</div>
+          <h4>Order #{data.order?.orderNumber}</h4>
+          <p>Estimated delivery: {data.trackingInfo?.estimatedDelivery}</p>
+          <button 
+            className="track-order-btn"
+            onClick={() => setShowOrderTracking(true)}
+          >
+            📍 Track Order
+          </button>
+        </div>
+      );
+
+    default:
+      // Render suggestions if available
+      if (data.suggestions) {
+        return (
+          <div className="chat-suggestions">
+            {data.suggestions.map((suggestion, idx) => (
+              <button
+                key={idx}
+                className="suggestion-btn"
+                onClick={() => handleQuickReply(suggestion)}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      return null;
+  }
+};
+
+// 5. Add function to handle chat order actions
+const handleChatOrderAction = async (action, orderData) => {
+  try {
+    const response = await fetch('http://localhost:5000/api/chat/order-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        userId: currentUser?.id || 'guest',
+        orderData
+      })
+    });
+
+    const data = await response.json();
     
-    setMessages(prev => [...prev, userMsg]);
-    setInputMessage('');
-    setIsTyping(true);
-
-    setTimeout(() => {
-      setIsTyping(false);
-      const response = generatePersonalizedResponse(inputMessage.toLowerCase(), currentUser.id);
-      setMessages(prev => [...prev, response]);
-    }, 1500);
-  };
-
+    if (data.success) {
+      // Add bot response to chat
+      const botResponse = {
+        role: 'bot',
+        content: data.response.message,
+        timestamp: new Date().toLocaleTimeString(),
+        data: data.response
+      };
+      
+      setMessages(prev => [...prev, botResponse]);
+      handleSpecialChatResponse(data.response);
+    }
+  } catch (error) {
+    console.error('Order action error:', error);
+  }
+};
   const handleQuickReply = (reply) => {
     setInputMessage(reply);
     sendMessage();

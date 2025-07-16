@@ -3054,3 +3054,341 @@ body {
     flex-direction: column;
   }
 }
+/* Enhanced Chat Message Styles */
+.chat-order-confirmation {
+  background: linear-gradient(135deg, #e8f5e8, #f0f9f0);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+  border-left: 4px solid #27ae60;
+}
+
+.reorder-summary h4 {
+  margin: 0 0 0.5rem 0;
+  color: #27ae60;
+  font-weight: 600;
+}
+
+.reorder-items {
+  background: white;
+  padding: 0.8rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.reorder-item {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9rem;
+}
+
+.reorder-item:last-child {
+  border-bottom: none;
+}
+
+.reorder-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.action-btn.confirm {
+  background: #27ae60;
+  color: white;
+}
+
+.action-btn.confirm:hover {
+  background: #219a52;
+  transform: translateY(-1px);
+}
+
+.action-btn.modify {
+  background: #f39c12;
+  color: white;
+}
+
+.action-btn.modify:hover {
+  background: #e67e22;
+  transform: translateY(-1px);
+}
+
+/* Menu Item Cards in Chat */
+.menu-item-card {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-color: #667eea;
+}
+
+.menu-item-info h4 {
+  margin: 0 0 0.3rem 0;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.menu-item-info p {
+  margin: 0 0 0.5rem 0;
+  color: #7f8c8d;
+  font-size: 0.8rem;
+}
+
+.menu-item-info .price {
+  color: #27ae60;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.add-to-cart-btn {
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.3s ease;
+}
+
+.add-to-cart-btn:hover {
+  background: #219a52;
+}
+
+/* Cart Summary in Chat */
+.chat-cart-summary {
+  background: linear-gradient(135deg, #fff3e0, #ffeaa7);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+  border-left: 4px solid #f39c12;
+}
+
+.chat-cart-summary h4 {
+  margin: 0 0 0.8rem 0;
+  color: #e67e22;
+  font-weight: 600;
+}
+
+.cart-item-summary {
+  padding: 0.3rem 0;
+  font-size: 0.9rem;
+  color: #2c3e50;
+}
+
+.cart-total {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 2px solid rgba(230, 126, 34, 0.3);
+  font-weight: 600;
+  color: #e67e22;
+  font-size: 1rem;
+}
+
+/* Address Collection Form */
+.chat-address-form {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+.address-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-input-field {
+  padding: 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: border-color 0.3s ease;
+}
+
+.chat-input-field:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+/* Order Success Animation */
+.chat-order-success {
+  background: linear-gradient(135deg, #d4edda, #c3e6cb);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 0.5rem;
+  text-align: center;
+  border-left: 4px solid #28a745;
+}
+
+.success-animation {
+  font-size: 2rem;
+  animation: bounce 1s infinite;
+  margin-bottom: 0.5rem;
+}
+
+.chat-order-success h4 {
+  margin: 0 0 0.5rem 0;
+  color: #155724;
+  font-weight: 600;
+}
+
+.chat-order-success p {
+  margin: 0 0 1rem 0;
+  color: #155724;
+  font-size: 0.9rem;
+}
+
+.track-order-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 25px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.track-order-btn:hover {
+  background: #218838;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+/* Enhanced Suggestions */
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.suggestion-btn {
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: #667eea;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.suggestion-btn:hover {
+  background: #667eea;
+  color: white;
+  transform: scale(1.05);
+}
+
+/* Payment Method Selection */
+.payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.payment-method-btn {
+  background: white;
+  border: 2px solid #e0e6ed;
+  padding: 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+  font-weight: 500;
+}
+
+.payment-method-btn:hover {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.payment-method-btn.selected {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+}
+
+/* Responsive Design for Enhanced Chat */
+@media (max-width: 768px) {
+  .reorder-actions {
+    flex-direction: column;
+  }
+  
+  .menu-item-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
+  
+  .chat-suggestions {
+    justify-content: center;
+  }
+  
+  .address-fields {
+    gap: 0.8rem;
+  }
+  
+  .chat-input-field {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+}
+
+/* Loading States */
+.chat-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.chat-loading-dots {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.chat-loading-dots span {
+  width: 4px;
+  height: 4px;
+  background: #667eea;
+  border-radius: 50%;
+  animation: loading-bounce 1.4s ease-in-out infinite both;
+}
+
+.chat-loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.chat-loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes loading-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
