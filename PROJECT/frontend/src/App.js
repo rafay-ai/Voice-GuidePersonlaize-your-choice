@@ -738,6 +738,150 @@ function App() {
     }, 500);
   };
 
+  const generateEnhancedChatbotResponse = (userInput, userId) => {
+  const userData = getUserData(userId);
+  const lowerInput = userInput.toLowerCase();
+  
+  let response = {
+    role: 'bot',
+    timestamp: new Date().toLocaleTimeString()
+  };
+
+  // Handle "Popular" button click
+  if (lowerInput.includes('popular') || lowerInput === 'popular restaurants') {
+    const popularRestaurants = getPopularRestaurants();
+    response.content = "🔥 Here are our most popular restaurants based on ratings, order count, and customer reviews:";
+    response.recommendations = popularRestaurants;
+    response.quickReplies = ["Order from these", "Show more restaurants", "My preferences"];
+  }
+  
+  // Handle "My Orders" button click
+  else if (lowerInput.includes('my orders') || lowerInput.includes('order history')) {
+    if (userData.orderHistory.length > 0) {
+      const recentOrders = userData.orderHistory.slice(0, 5);
+      response.content = `📋 You've placed ${userData.orderHistory.length} orders. Here are your recent orders:`;
+      response.orderHistory = recentOrders;
+      response.quickReplies = ["Reorder favorite", "Rate orders", "View all orders"];
+    } else {
+      response.content = "📋 You haven't placed any orders yet! Let me show you some great restaurants to get started:";
+      response.recommendations = restaurants.slice(0, 3);
+      response.quickReplies = ["Show popular", "Browse by cuisine", "Get recommendations"];
+    }
+  }
+  
+  // Handle "Favorites" button click
+  else if (lowerInput.includes('favorites') || lowerInput.includes('favourite')) {
+    if (userData.favorites.length > 0) {
+      const favoriteRestaurants = userData.favorites
+        .map(id => restaurants.find(r => r._id === id))
+        .filter(Boolean);
+      response.content = "❤️ Here are your favorite restaurants:";
+      response.recommendations = favoriteRestaurants;
+      response.quickReplies = ["Order from favorites", "Remove from favorites", "Add more favorites"];
+    } else {
+      response.content = "❤️ You haven't added any favorites yet. Try some restaurants and add them to your favorites by clicking the heart button! Here are some popular options:";
+      response.recommendations = getPopularRestaurants().slice(0, 3);
+      response.quickReplies = ["Show popular", "Browse restaurants", "Get recommendations"];
+    }
+  }
+  
+  // Handle recommendations request
+  else if (lowerInput.includes('recommend') || lowerInput.includes('suggest')) {
+    const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants);
+    
+    if (userData.behaviorData.totalOrders > 0) {
+      response.content = `🎯 Based on your ${userData.behaviorData.totalOrders} previous orders and preferences, here are my top picks:`;
+    } else {
+      response.content = "🎯 Based on your preferences, here are my personalized recommendations:";
+    }
+    response.recommendations = recommendations;
+    response.quickReplies = ["Order now", "Show more", "Update preferences"];
+  }
+  
+  // Handle cuisine-specific requests
+  else if (lowerInput.includes('biryani') || lowerInput.includes('pizza') || lowerInput.includes('burger') || lowerInput.includes('chinese')) {
+    const cuisine = extractCuisineFromInput(lowerInput);
+    const cuisineRestaurants = restaurants.filter(r => 
+      r.cuisine && r.cuisine.some(c => c.toLowerCase().includes(cuisine.toLowerCase()))
+    ).slice(0, 4);
+    
+    response.content = `🍽️ Great choice! Here are the best ${cuisine} restaurants:`;
+    response.recommendations = cuisineRestaurants;
+    response.quickReplies = ["Order now", "Show more cuisines", "Back to popular"];
+  }
+  
+  // Handle stats request
+  else if (lowerInput.includes('stats') || lowerInput.includes('my data')) {
+    const stats = userData.behaviorData;
+    response.content = `📊 Your Food Journey:\n\n🛒 Total Orders: ${stats.totalOrders}\n💰 Total Spent: Rs. ${stats.totalSpent}\n📈 Average Order: Rs. ${Math.round(stats.averageOrderValue)}\n🍽️ Favorite Cuisine: ${stats.mostOrderedCuisine || 'Still discovering!'}\n❤️ Favorites: ${userData.favorites.length} restaurants`;
+    response.quickReplies = ["View favorites", "Order history", "Get recommendations"];
+  }
+  
+  // Default response with helpful options
+  else {
+    response.content = "I'm here to help you discover amazing food! What would you like to do?";
+    response.quickReplies = ["Show popular restaurants", "Get recommendations", "Browse by cuisine", "My order history"];
+  }
+
+  return response;
+};
+
+// Function to get popular restaurants based on multiple factors
+const getPopularRestaurants = () => {
+  return restaurants
+    .map(restaurant => {
+      // Calculate popularity score
+      let popularityScore = 0;
+      
+      // Rating weight (40%)
+      popularityScore += (restaurant.rating || 0) * 40;
+      
+      // Order count simulation (30%)
+      // In real app, this would come from database
+      const simulatedOrderCount = Math.random() * 100 + 50;
+      popularityScore += (simulatedOrderCount / 10) * 30;
+      
+      // Recent activity weight (20%)
+      const recentActivity = Math.random() * 20;
+      popularityScore += recentActivity;
+      
+      // Customer satisfaction weight (10%)
+      const satisfaction = Math.random() * 10;
+      popularityScore += satisfaction;
+      
+      return {
+        ...restaurant,
+        popularityScore,
+        orderCount: Math.floor(simulatedOrderCount),
+        trendingBadge: popularityScore > 350 ? '🔥 Trending' : popularityScore > 300 ? '⭐ Popular' : ''
+      };
+    })
+    .sort((a, b) => b.popularityScore - a.popularityScore)
+    .slice(0, 5);
+};
+
+// Function to extract cuisine from user input
+const extractCuisineFromInput = (input) => {
+  const cuisineKeywords = {
+    'biryani': 'Biryani',
+    'pizza': 'Pizza',
+    'burger': 'Burger',
+    'chinese': 'Chinese',
+    'fast food': 'Fast Food',
+    'pakistani': 'Pakistani',
+    'desi': 'Pakistani',
+    'italian': 'Italian',
+    'bbq': 'BBQ'
+  };
+  
+  for (const [keyword, cuisine] of Object.entries(cuisineKeywords)) {
+    if (input.includes(keyword)) {
+      return cuisine;
+    }
+  }
+  return 'food';
+};
+
   const completeOnboarding = (finalPreferences = userPreferences) => {
     updateUserPreferences(currentUser.id, finalPreferences);
     setIsNewUser(false);
@@ -830,53 +974,29 @@ function App() {
   };
   
   setMessages(prev => [...prev, userMsg]);
+  const currentInput = inputMessage;
   setInputMessage('');
   setIsTyping(true);
 
-  try {
-    const response = await fetch('http://localhost:5000/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: inputMessage,
-        userId: currentUser?.id || 'guest',
-        sessionData: {
-          currentCart: cart,
-          selectedRestaurant: selectedRestaurant
-        }
-      })
-    });
-
-    const data = await response.json();
-    console.log('🤖 Enhanced chatbot response:', data);
-
+  // First try the enhanced chatbot response
+  setTimeout(() => {
     setIsTyping(false);
     
-    if (data.success) {
-      const botResponse = {
-        role: 'bot',
-        content: data.bot_response,
-        timestamp: new Date().toLocaleTimeString(),
-        type: data.response_type,
-        data: data.data
-      };
+    // Use enhanced response for specific commands
+    if (currentInput.toLowerCase().includes('popular') || 
+        currentInput.toLowerCase().includes('my orders') || 
+        currentInput.toLowerCase().includes('favorites') ||
+        currentInput.toLowerCase().includes('recommend') ||
+        currentInput.toLowerCase().includes('stats')) {
       
-      setMessages(prev => [...prev, botResponse]);
-      
-      // Handle special response types
-      handleSpecialChatResponse(data.data);
+      const response = generateEnhancedChatbotResponse(currentInput.toLowerCase(), currentUser?.id || 'guest');
+      setMessages(prev => [...prev, response]);
+    } else {
+      // Fallback to existing chatbot or simple response
+      const response = generatePersonalizedResponse(currentInput.toLowerCase(), currentUser?.id || 'guest');
+      setMessages(prev => [...prev, response]);
     }
-  } catch (error) {
-    console.error('Chat error:', error);
-    setIsTyping(false);
-    
-    const errorResponse = {
-      role: 'bot',
-      content: "Sorry, I'm having trouble right now. Please try again! 😔",
-      timestamp: new Date().toLocaleTimeString()
-    };
-    setMessages(prev => [...prev, errorResponse]);
-  }
+  }, 1000);
 };
 
 // 2. Add function to handle special chat responses
@@ -1147,6 +1267,39 @@ const handleChatOrderAction = async (action, orderData) => {
     setInputMessage(reply);
     sendMessage();
   };
+
+  // Enhanced quick reply handler
+const handleEnhancedQuickReply = (reply) => {
+  console.log('🎯 Quick reply clicked:', reply);
+  
+  // Map quick replies to appropriate responses
+  const quickReplyMap = {
+    'Show popular restaurants': 'popular restaurants',
+    'Get recommendations': 'recommend restaurants',
+    'Browse by cuisine': 'show me different cuisines',
+    'My order history': 'my orders',
+    'View favorites': 'my favorites',
+    'Order now': 'I want to order',
+    'Show more': 'show more restaurants',
+    'Back to popular': 'popular restaurants'
+  };
+  
+  const mappedReply = quickReplyMap[reply] || reply;
+  setInputMessage('');
+  
+  // Generate response
+  const response = generateEnhancedChatbotResponse(mappedReply, currentUser?.id || 'guest');
+  setMessages(prev => [
+    ...prev,
+    {
+      role: 'user',
+      content: reply,
+      timestamp: new Date().toLocaleTimeString()
+    },
+    response
+  ]);
+};
+
 
   const handleRateFromTracking = () => {
     if (orderStatus && currentUser) {
@@ -1555,6 +1708,14 @@ const handleChatOrderAction = async (action, orderData) => {
                           </div>
                           <p className="min-order">Min order: Rs. {restaurant.minimumOrder}</p>
                           
+                          {/* Add trending/popular badge if available */}
+                          {restaurant.trendingBadge && (
+                            <div className="trending-badge">
+                              {restaurant.trendingBadge}
+                            </div>
+                          )}
+                          
+                          {/* Favorite Heart Button - only show if user is logged in */}
                           {currentUser && !currentUser.isAdmin && (
                             <button
                               className={`favorite-heart ${getUserData(currentUser.id).favorites.includes(restaurant._id) ? 'active' : ''}`}
@@ -1562,6 +1723,7 @@ const handleChatOrderAction = async (action, orderData) => {
                                 e.stopPropagation();
                                 toggleFavorite(restaurant._id);
                               }}
+                              title={getUserData(currentUser.id).favorites.includes(restaurant._id) ? 'Remove from favorites' : 'Add to favorites'}
                             >
                               ❤️
                             </button>
