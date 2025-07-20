@@ -1300,6 +1300,47 @@ const handleEnhancedQuickReply = (reply) => {
   ]);
 };
 
+  // Enhanced recommendation card click handler
+  const handleRecommendationClick = (restaurant) => {
+    console.log('🏪 Restaurant selected from chat:', restaurant.name);
+    
+    // Close chat and select restaurant
+    setShowChat(false);
+    selectRestaurant(restaurant);
+    
+    // Add a helpful message
+    setTimeout(() => {
+      alert(`🎉 Great choice! ${restaurant.name} is now selected. You can view their menu and add items to your cart.`);
+    }, 500);
+  };
+
+  // Order history display component for chat
+  const ChatOrderHistory = ({ orders }) => {
+    if (!orders || orders.length === 0) return null;
+    
+    return (
+      <div className="chat-order-history">
+        {orders.map((order, index) => (
+          <div key={index} className="chat-order-item">
+            <div className="order-header">
+              <h4>{order.restaurantName}</h4>
+              <span className="order-date">{new Date(order.date).toLocaleDateString()}</span>
+            </div>
+            <p className="order-items">
+              {order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}
+            </p>
+            <div className="order-footer">
+              <span className="order-total">Rs. {order.total}</span>
+              <span className={`order-status ${order.status}`}>{order.status}</span>
+              {order.rating && (
+                <span className="order-rating">{'⭐'.repeat(order.rating)}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const handleRateFromTracking = () => {
     if (orderStatus && currentUser) {
