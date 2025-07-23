@@ -1301,46 +1301,46 @@ const handleEnhancedQuickReply = (reply) => {
 };
 
   // Enhanced recommendation card click handler
-  const handleRecommendationClick = (restaurant) => {
-    console.log('🏪 Restaurant selected from chat:', restaurant.name);
-    
-    // Close chat and select restaurant
-    setShowChat(false);
-    selectRestaurant(restaurant);
-    
-    // Add a helpful message
-    setTimeout(() => {
-      alert(`🎉 Great choice! ${restaurant.name} is now selected. You can view their menu and add items to your cart.`);
-    }, 500);
-  };
+// Enhanced recommendation card click handler
+const handleRecommendationClick = (restaurant) => {
+  console.log('🏪 Restaurant selected from chat:', restaurant.name);
 
-  // Order history display component for chat
-  const ChatOrderHistory = ({ orders }) => {
-    if (!orders || orders.length === 0) return null;
-    
-    return (
-      <div className="chat-order-history">
-        {orders.map((order, index) => (
-          <div key={index} className="chat-order-item">
-            <div className="order-header">
-              <h4>{order.restaurantName}</h4>
-              <span className="order-date">{new Date(order.date).toLocaleDateString()}</span>
-            </div>
-            <p className="order-items">
-              {order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}
-            </p>
-            <div className="order-footer">
-              <span className="order-total">Rs. {order.total}</span>
-              <span className={`order-status ${order.status}`}>{order.status}</span>
-              {order.rating && (
-                <span className="order-rating">{'⭐'.repeat(order.rating)}</span>
-              )}
-            </div>
+  // Close chat and select restaurant
+  setShowChat(false);
+  selectRestaurant(restaurant);
+
+  // Add a helpful message
+  setTimeout(() => {
+  alert(`🎉 Great choice! ${restaurant.name} is now selected. You can view their menu and add items to your cart.`);
+}, 500);
+
+// Order history display component for chat
+const ChatOrderHistory = ({ orders }) => {
+  if (!orders || orders.length === 0) return null;
+
+  return (
+    <div className="chat-order-history">
+      {orders.map((order, index) => (
+        <div key={index} className="chat-order-item">
+          <div className="order-header">
+            <h4>{order.restaurantName}</h4>
+            <span className="order-date">{new Date(order.date).toLocaleDateString()}</span>
           </div>
-        ))}
-      </div>
-    );
-  };
+          <p className="order-items">
+            {order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}
+          </p>
+          <div className="order-footer">
+            <span className="order-total">Rs. {order.total}</span>
+            <span className={`order-status ${order.status}`}>{order.status}</span>
+            {order.rating && (
+              <span className="order-rating">{'⭐'.repeat(order.rating)}</span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
   const handleRateFromTracking = () => {
     if (orderStatus && currentUser) {
@@ -1946,130 +1946,149 @@ const handleEnhancedQuickReply = (reply) => {
                 </div>
               )}
 
-              {messages.map((msg, index) => (
-                <div key={index} className="message-container">
-                  <div className={`message ${msg.role}`}>
-                    <div className="message-content">
-                      {msg.content}
-                    </div>
-                    <div className="message-time">{msg.timestamp}</div>
-                  </div>
+                // Update your chat messages JSX section to handle new response types
+// Find your messages.map() in the chat and update it:
 
-                  {/* Onboarding options */}
-                  {msg.questionData && (
-                    <div className="onboarding-options">
-                      {msg.questionData.options.map((option, idx) => (
-                        <button
-                          key={idx}
-                          className="option-button"
-                          onClick={() => handleOptionSelect(option, msg.questionData.key)}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+{messages.map((msg, index) => (
+  <div key={index} className="message-container">
+    <div className={`message ${msg.role}`}>
+      <div className="message-content">
+        {msg.content}
+      </div>
+      <div className="message-time">{msg.timestamp}</div>
+    </div>
 
-                  {/* Quick replies */}
-                  {msg.quickReplies && (
-                    <div className="quick-replies">
-                      {msg.quickReplies.map((reply, idx) => (
-                        <button
-                          key={idx}
-                          className="quick-reply-btn"
-                          onClick={() => handleQuickReply(reply)}
-                        >
-                          {reply}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+    {/* Quick Replies */}
+    {msg.quickReplies && (
+      <div className="quick-replies">
+        {msg.quickReplies.map((reply, idx) => (
+          <button
+            key={idx}
+            className="quick-reply-btn"
+            onClick={() => handleEnhancedQuickReply(reply)}
+          >
+            {reply}
+          </button>
+        ))}
+      </div>
+    )}
 
-                  {/* Restaurant recommendations */}
-                  {msg.recommendations && msg.recommendations.length > 0 && (
-                    <div className="chat-recommendations">
-                      {msg.recommendations.map((restaurant, idx) => (
-                        <div 
-                          key={idx} 
-                          className="recommendation-card"
-                          onClick={() => selectRestaurant(restaurant)}
-                        >
-                          <div className="rec-header">
-                            <h4>{restaurant.name}</h4>
-                            <div className="rec-rating">⭐ {restaurant.rating}</div>
-                          </div>
-                          <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
-                          <div className="rec-info">
-                            <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
-                            <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
-                          </div>
-                          {restaurant.score && (
-                            <div className="match-score">
-                              {Math.round(restaurant.score)}% match
-                            </div>
-                          )}
-                          {restaurant.personalizedReason && (
-                            <div className="recommendation-reason">
-                              {restaurant.personalizedReason}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {isTyping && (
-                <div className="typing-indicator">
-                  <div className="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span className="typing-text">AI is thinking...</span>
-                </div>
-              )}
+    {/* Restaurant Recommendations */}
+    {msg.recommendations && msg.recommendations.length > 0 && (
+      <div className="chat-recommendations">
+        {msg.recommendations.map((restaurant, idx) => (
+          <div 
+            key={idx} 
+            className="recommendation-card"
+            onClick={() => handleRecommendationClick(restaurant)}
+          >
+            <div className="rec-header">
+              <h4>{restaurant.name}</h4>
+              <div className="rec-rating">⭐ {restaurant.rating}</div>
             </div>
+            <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
+            <div className="rec-info">
+              <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
+              <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
+            </div>
+            
+            {/* Show trending badge */}
+            {restaurant.trendingBadge && (
+              <div className="trending-badge-chat">
+                {restaurant.trendingBadge}
+              </div>
+            )}
+            
+            {/* Show order count for popular restaurants */}
+            {restaurant.orderCount && (
+              <div className="order-count">
+                📦 {restaurant.orderCount}+ orders
+              </div>
+            )}
+            
+            {restaurant.personalizedReason && (
+              <div className="recommendation-reason">
+                {restaurant.personalizedReason}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
 
-            <div className="chat-input-section">
-              {!isNewUser && (
-                <div className="suggestions">
-                  <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
-                    🎯 Recommendations
-                  </button>
-                  <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
-                    🔥 Popular
-                  </button>
-                  <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
-                    📋 My Orders
-                  </button>
-                  <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
-                    ❤️ Favorites
+    {/* Order History Display */}
+    {msg.orderHistory && (
+      <ChatOrderHistory orders={msg.orderHistory} />
+    )}
+
+    {/* Onboarding options (keep existing) */}
+    {msg.questionData && (
+      <div className="onboarding-options">
+        {msg.questionData.options.map((option, idx) => (
+          <button
+            key={idx}
+            className="option-button"
+            onClick={() => handleOptionSelect(option, msg.questionData.key)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+))}
+
+
+                {isTyping && (
+                  <div className="typing-indicator">
+                    <div className="typing-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <span className="typing-text">AI is thinking...</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="chat-input-section">
+                {!isNewUser && (
+                  <div className="suggestions">
+                    <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
+                      🎯 Recommendations
+                    </button>
+                    <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
+                      🔥 Popular
+                    </button>
+                    <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
+                      📋 My Orders
+                    </button>
+                    <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
+                      ❤️ Favorites
+                    </button>
+                  </div>
+                )}
+                
+                <div className="chat-input">
+                  <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !isNewUser && sendMessage()}
+                    placeholder={isNewUser ? "Please select an option above..." : "Ask me anything about food..."}
+                    disabled={isNewUser}
+                  />
+                  <button 
+                    onClick={sendMessage} 
+                    disabled={isNewUser || !inputMessage.trim()}
+                    className="send-button"
+                  >
+                    <span>🚀</span>
                   </button>
                 </div>
-              )}
-              
-              <div className="chat-input">
-                <input
-                  type="text"
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !isNewUser && sendMessage()}
-                  placeholder={isNewUser ? "Please select an option above..." : "Ask me anything about food..."}
-                  disabled={isNewUser}
-                />
-                <button 
-                  onClick={sendMessage} 
-                  disabled={isNewUser || !inputMessage.trim()}
-                  className="send-button"
-                >
-                  <span>🚀</span>
-                </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* User Profile Modal */}
         {showUserProfile && currentUser && (
@@ -2601,5 +2620,5 @@ const handleEnhancedQuickReply = (reply) => {
     </div>
   );
 }
-
+}
 export default App;
