@@ -8,12 +8,15 @@ const User = require('./models/User');
 const Restaurant = require('./models/Restaurant');
 const MenuItem = require('./models/MenuItem');
 const Order = require('./models/Order');
+const AdvancedRecommendationEngine = require('./services/advancedRecommendation');
+
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
 const { DynamicPricingEngine } = require('./services/dynamicPricing');
 const EnhancedChatbotService = require('./services/enhancedChatbot'); // FIXED: No destructuring
 const pricingEngine = new DynamicPricingEngine();
 const enhancedChatbot = new EnhancedChatbotService();
+const advancedRecommendation = new AdvancedRecommendationEngine();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -24,7 +27,254 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+console.log('🔧 Setting up routes...');
+console.log('🎯 Advanced Recommendation Engine status:', !!advancedRecommendation);
 
+// Test the service directly
+try {
+    console.log('🧪 Testing advanced recommendation service...');
+    if (advancedRecommendation && typeof advancedRecommendation.getPersonalizedRecommendations === 'function') {
+        console.log('✅ Advanced recommendation service is working');
+    } else {
+        console.log('❌ Advanced recommendation service is NOT working');
+        console.log('Service type:', typeof advancedRecommendation);
+        console.log('Service methods:', Object.getOwnPropertyNames(advancedRecommendation));
+    }
+} catch (error) {
+    console.error('❌ Service test error:', error);
+}
+
+// Simple test route BEFORE your enhanced recommendations route
+app.get('/api/test/enhanced', (req, res) => {
+    console.log('🧪 Test route hit');
+    res.json({
+        success: true,
+        message: 'Enhanced recommendation route setup is working',
+        serviceAvailable: !!advancedRecommendation,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// =============== ENHANCED RECOMMENDATION ROUTES ===============
+
+app.get('/api/recommendations/advanced/:userId', async (req, res) => {
+    console.log('🎯 Enhanced recommendations route hit!');
+    console.log('   URL:', req.url);
+    console.log('   Params:', req.params);
+    console.log('   Query:', req.query);
+    
+    try {
+        const { userId } = req.params;
+        const { 
+            count = 6,  // Reduced for testing
+            includeNew = 'true',
+            diversityFactor = 0.3 
+        } = req.query;
+        
+        console.log('🔍 Processing request for user:', userId);
+        
+        // Check if service exists
+        if (!advancedRecommendation) {
+            console.error('❌ Advanced recommendation service not available');
+            return res.status(500).json({
+                success: false,
+                message: 'Recommendation service not available',
+                error: 'Service not initialized'
+            });
+        }
+        
+        // Check if method exists
+        if (typeof advancedRecommendation.getPersonalizedRecommendations !== 'function') {
+            console.error('❌ getPersonalizedRecommendations method not available');
+            return res.status(500).json({
+                success: false,
+                message: 'Recommendation method not available',
+                error: 'Method not found'
+            });
+        }
+        
+        console.log('🔄 Calling recommendation service...');
+        
+        const recommendations = await advancedRecommendation.getPersonalizedRecommendations(
+            userId, 
+            { 
+                count: parseInt(count),
+                includeNewRestaurants: includeNew === 'true',
+                diversityFactor: parseFloat(diversityFactor),
+                contextualFactors: {
+                    currentTime: new Date()
+                }
+            }
+        );
+        
+        console.log('✅ Recommendations generated successfully:', recommendations.length);
+        
+        res.json({
+            success: true,
+            count: recommendations.length,
+            recommendations,
+            generatedAt: new Date().toISOString(),
+            algorithm: 'advanced_multi_factor',
+            userId: userId,
+            debug: {
+                serviceWorking: true,
+                requestTime: new Date().toISOString()
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Enhanced recommendations route error:', error);
+        console.error('❌ Error stack:', error.stack);
+        
+        res.status(500).json({
+            success: false,
+            message: 'Error generating enhanced recommendations',
+            error: error.message,
+            timestamp: new Date().toISOString(),
+            debug: {
+                serviceAvailable: !!advancedRecommendation,
+                errorType: error.constructor.name
+            }
+        });
+    }
+});
+
+// Get recommendation explanations
+app.get('/api/recommendations/explain/:userId/:restaurantId', async (req, res) => {
+    try {
+        const { userId, restaurantId } = req.params;
+        
+        // Get the specific restaurant
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+        
+        // Get user data for explanation
+        const user = await User.findById(userId);
+        const userOrders = await Order.find({ user: userId })
+            .populate('restaurant')
+            .sort({ createdAt: -1 })
+            .limit(10);
+        
+        // Calculate explanation factors
+        const explanation = await advancedRecommendation.calculateMultiFactorScore(
+            restaurant,
+            user,
+            userOrders,
+            { currentTime: new Date() }
+        );
+        
+        res.json({
+            success: true,
+            restaurant: restaurant.name,
+            explanation: {
+                personalMatch: `${Math.round(explanation.personalPreference * 100)}%`,
+                popularityScore: `${Math.round(explanation.popularity * 100)}%`,
+                timeRelevance: `${Math.round(explanation.temporal * 100)}%`,
+                overallScore: `${Math.round(
+                    (explanation.personalPreference * 0.35 + 
+                     explanation.collaborative * 0.25 + 
+                     explanation.contentBased * 0.20 + 
+                     explanation.temporal * 0.10 + 
+                     explanation.popularity * 0.10) * 100
+                )}%`,
+                reasons: [
+                    explanation.personalPreference > 0.6 ? "Matches your taste preferences" : null,
+                    explanation.collaborative > 0.5 ? "Popular with similar users" : null,
+                    explanation.temporal > 0.3 ? "Perfect timing for this meal" : null,
+                    explanation.popularity > 0.7 ? "Trending and highly rated" : null
+                ].filter(Boolean)
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Recommendation explanation error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error generating explanation',
+            error: error.message
+        });
+    }
+});
+
+// Update user preferences after order (for learning)
+app.post('/api/recommendations/learn/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { orderData, feedback } = req.body;
+        
+        console.log('🧠 Learning from user behavior:', userId);
+        
+        // Update user profile based on order
+        await advancedRecommendation.updateUserProfile(userId, orderData);
+        
+        res.json({
+            success: true,
+            message: 'User preferences updated',
+            userId: userId
+        });
+        
+    } catch (error) {
+        console.error('❌ Learning update error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating user preferences',
+            error: error.message
+        });
+    }
+});
+
+// Get recommendation performance analytics
+app.get('/api/analytics/recommendations', async (req, res) => {
+    try {
+        const { timeRange = '30' } = req.query;
+        const daysBack = parseInt(timeRange);
+        const startDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+        
+        // Get recommendation performance data
+        const totalOrders = await Order.countDocuments({
+            createdAt: { $gte: startDate }
+        });
+        
+        const recommendationOrders = await Order.countDocuments({
+            createdAt: { $gte: startDate },
+            'analytics.recommendationSource': { $exists: true, $ne: 'manual' }
+        });
+        
+        const conversionRate = totalOrders > 0 ? (recommendationOrders / totalOrders) * 100 : 0;
+        
+        // Get popular recommendation sources
+        const recommendationSources = await Order.aggregate([
+            { $match: { createdAt: { $gte: startDate } } },
+            { $group: { _id: '$analytics.recommendationSource', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+        
+        res.json({
+            success: true,
+            timeRange: `${daysBack} days`,
+            analytics: {
+                totalOrders,
+                recommendationOrders,
+                conversionRate: Math.round(conversionRate * 100) / 100,
+                recommendationSources,
+                manualOrders: totalOrders - recommendationOrders
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Recommendation analytics error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching recommendation analytics',
+            error: error.message
+        });
+    }
+});
 
 // Dynamic Pricing Middleware
 const applyDynamicPricing = async (req, res, next) => {

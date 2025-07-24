@@ -316,6 +316,9 @@ function App() {
   const [surgeStatus, setSurgeStatus] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [enhancedRecommendations, setEnhancedRecommendations] = useState([]);
+  const [loadingEnhancedRecs, setLoadingEnhancedRecs] = useState(false);
+  const [showEnhancedRecs, setShowEnhancedRecs] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState({
     name: '',
     phone: '',
@@ -394,6 +397,53 @@ function App() {
       console.error('❌ Error fetching surge status:', error);
     }
   };
+
+const fetchEnhancedRecommendations = async (userId) => {
+    console.log('🎯 Fetching enhanced recommendations for:', userId);
+    setLoadingEnhancedRecs(true);
+    
+    try {
+        // Use your real ObjectId for testing
+        let testUserId = userId;
+        
+        // If it's a fake user ID, use your real ObjectId
+        if (!userId || userId === 'guest' || userId === 'user_001' || userId.length < 20) {
+            testUserId = '6870b084e75152da7d6afb69'; // Your real ObjectId
+            console.log('🔄 Using real ObjectId for testing:', testUserId);
+        }
+        
+        const url = `http://localhost:5000/api/recommendations/advanced/${testUserId}?count=6&includeNew=true`;
+        console.log('📡 Requesting:', url);
+        
+        const response = await fetch(url);
+        console.log('📨 Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ HTTP Error:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('📦 Response data:', data);
+        
+        if (data.success && data.recommendations && data.recommendations.length > 0) {
+            setEnhancedRecommendations(data.recommendations);
+            setShowEnhancedRecs(true); // THIS WAS MISSING - ALWAYS SET TO TRUE WHEN WE HAVE DATA
+            console.log('✅ Enhanced recommendations loaded:', data.recommendations.length);
+        } else {
+            console.log('⚠️ No recommendations returned');
+            setEnhancedRecommendations([]);
+            setShowEnhancedRecs(true); // STILL SHOW THE SECTION BUT WITH EMPTY STATE
+        }
+    } catch (error) {
+        console.error('❌ Enhanced recommendations error:', error);
+        setEnhancedRecommendations([]);
+        setShowEnhancedRecs(true); // STILL SHOW THE SECTION BUT WITH ERROR STATE
+    } finally {
+        setLoadingEnhancedRecs(false);
+    }
+};
 
   // Enhanced calculateTotal function to use dynamic pricing
   const calculateTotalWithDynamicPricing = () => {
@@ -512,20 +562,23 @@ function App() {
   }, []);
 
   useEffect(() => {
-    console.log('Current user changed:', currentUser);
+    console.log('👤 User changed, checking for enhanced recommendations...', {
+        user: currentUser?.name,
+        isAdmin: currentUser?.isAdmin,
+        userId: currentUser?.id
+    });
+    
+    // Always fetch recommendations for any logged-in non-admin user
     if (currentUser && !currentUser.isAdmin) {
-      const userData = getUserData(currentUser.id);
-      
-      if (Object.keys(userData.preferences).length === 0 || currentUser.isNewUser) {
-        console.log('New user detected, starting onboarding...');
-        setIsNewUser(true);
-        setShowChat(true);
-        startOnboarding();
-      } else {
-        setUserPreferences(userData.preferences);
-      }
+        // Use real ObjectId for testing
+        const testUserId = '6870b084e75152da7d6afb69';
+        console.log('📡 Fetching enhanced recommendations for user:', testUserId);
+        fetchEnhancedRecommendations(testUserId);
+    } else {
+        console.log('❌ Not fetching recommendations - no user or admin user');
+        setEnhancedRecommendations([]);
     }
-  }, [currentUser]);
+}, [currentUser]);
 
   useEffect(() => {
     if (currentUser?.isAdmin) {
@@ -552,6 +605,34 @@ function App() {
     }
   }, [selectedRestaurant, cart.length]);
 
+useEffect(() => {
+    console.log('👤 User changed, checking for enhanced recommendations...', {
+        user: currentUser?.name,
+        isAdmin: currentUser?.isAdmin,
+        userId: currentUser?.id
+    });
+    
+    // Always fetch recommendations for any logged-in non-admin user
+    if (currentUser && !currentUser.isAdmin) {
+        // Use real ObjectId for testing
+        const testUserId = '6870b084e75152da7d6afb69';
+        console.log('📡 Fetching enhanced recommendations for user:', testUserId);
+        fetchEnhancedRecommendations(testUserId);
+    } else {
+        console.log('❌ Not fetching recommendations - no user or admin user');
+        setEnhancedRecommendations([]);
+        setShowEnhancedRecs(false);
+    }
+}, [currentUser]);
+
+useEffect(() => {
+    console.log('🔍 State Debug:', {
+        showEnhancedRecs,
+        enhancedRecommendationsCount: enhancedRecommendations.length,
+        currentUser: currentUser?.name,
+        loadingEnhancedRecs
+    });
+}, [showEnhancedRecs, enhancedRecommendations, currentUser, loadingEnhancedRecs]);
   // ===== API FUNCTIONS =====
   const fetchRestaurants = async () => {
     try {
@@ -616,44 +697,44 @@ function App() {
   };
 
   // ===== AUTH FUNCTIONS =====
-  const handleLogin = async (e) => {
+const handleLogin = async (e) => {
     e.preventDefault();
     
     if (authForm.email === 'admin@food.pk' && authForm.password === 'admin123') {
-  const adminUser = {
-    id: '6870b084e75152da7d6afb69', // Valid ObjectId format
-    name: 'Admin',
-    email: authForm.email,
-    isAdmin: true
-  };
-  
-  setCurrentUser(adminUser);
-  localStorage.setItem('currentUser', JSON.stringify(adminUser));
-  setShowAuth(false);
-  setShowAdminDashboard(true);
-  alert('Welcome Admin!');
-  
-  setAuthForm({ name: '', email: '', password: '', phone: '' });
-  return;
-}
+        const adminUser = {
+            id: '6870b084e75152da7d6afb69', // Use your real ObjectId
+            name: 'Admin',
+            email: authForm.email,
+            isAdmin: true
+        };
+        
+        setCurrentUser(adminUser);
+        localStorage.setItem('currentUser', JSON.stringify(adminUser));
+        setShowAuth(false);
+        setShowAdminDashboard(true);
+        alert('Welcome Admin!');
+        
+        setAuthForm({ name: '', email: '', password: '', phone: '' });
+        return;
+    }
     
     if (authForm.email && authForm.password) {
-      const user = {
-        id: 'user_001',
-        name: authForm.name || 'Guest User',
-        email: authForm.email,
-        phone: authForm.phone,
-        isAdmin: false
-      };
-      
-      setCurrentUser(user);
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      setShowAuth(false);
-      alert(`Welcome back, ${user.name}!`);
-      
-      setAuthForm({ name: '', email: '', password: '', phone: '' });
+        const user = {
+            id: '6870b084e75152da7d6afb69', // Use your real ObjectId for testing
+            name: authForm.name || 'Test User',
+            email: authForm.email,
+            phone: authForm.phone,
+            isAdmin: false
+        };
+        
+        setCurrentUser(user);
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        setShowAuth(false);
+        alert(`Welcome back, ${user.name}!`);
+        
+        setAuthForm({ name: '', email: '', password: '', phone: '' });
     }
-  };
+};
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -737,7 +818,156 @@ function App() {
       }
     }, 500);
   };
+const EnhancedRecommendationsSection = () => {
+    console.log('🎯 EnhancedRecommendationsSection rendering...', {
+        currentUser: currentUser?.name,
+        recommendationsCount: enhancedRecommendations.length,
+        loadingEnhancedRecs,
+        showEnhancedRecs
+    });
 
+    // Show for logged-in non-admin users only
+    if (!currentUser || currentUser.isAdmin) {
+        console.log('❌ No user or admin user, not showing enhanced recs');
+        return null;
+    }
+
+    // Always show the section for logged-in users (remove showEnhancedRecs dependency)
+    return (
+        <div className="enhanced-recommendations-section">
+            {loadingEnhancedRecs ? (
+                // Loading state
+                <>
+                    <div className="enhanced-rec-header">
+                        <h2>🎯 Loading Your Personalized Recommendations...</h2>
+                        <p>We're analyzing your preferences</p>
+                        <span className="loading-indicator">🔄</span>
+                    </div>
+                    <div className="loading-placeholder">
+                        <div className="loading-spinner"></div>
+                        <p>Finding the perfect restaurants for you...</p>
+                    </div>
+                </>
+            ) : enhancedRecommendations.length === 0 ? (
+                // Empty state
+                <>
+                    <div className="enhanced-rec-header">
+                        <h2>🎯 Personalized Recommendations</h2>
+                        <p>Let us find the perfect restaurants for you</p>
+                    </div>
+                    <div className="no-recommendations-state">
+                        <div className="empty-state-icon">🍽️</div>
+                        <h3>Getting your recommendations ready...</h3>
+                        <p>We're learning your preferences to provide better suggestions.</p>
+                        <button 
+                            className="refresh-recommendations"
+                            onClick={() => {
+                                console.log('🔄 Manual refresh clicked');
+                                fetchEnhancedRecommendations('6870b084e75152da7d6afb69');
+                            }}
+                        >
+                            🔄 Get My Recommendations
+                        </button>
+                    </div>
+                </>
+            ) : (
+                // Show recommendations
+                <>
+                    <div className="enhanced-rec-header">
+                        <h2>🎯 Personalized Just For You</h2>
+                        <p>Based on your preferences and ordering history</p>
+                        {loadingEnhancedRecs && <span className="loading-indicator">🔄 Updating...</span>}
+                    </div>
+                    
+                    <div className="enhanced-rec-grid">
+                        {enhancedRecommendations.slice(0, 6).map((rec, index) => (
+                            <div 
+                                key={rec.restaurant._id}
+                                className="enhanced-rec-card"
+                                onClick={() => {
+                                    console.log('🏪 Restaurant selected:', rec.restaurant.name);
+                                    selectRestaurant(rec.restaurant);
+                                }}
+                            >
+                                <div className="rec-rank">#{index + 1}</div>
+                                
+                                <div className="rec-restaurant-info">
+                                    <h4>{rec.restaurant.name}</h4>
+                                    <p className="rec-cuisine">{rec.restaurant.cuisine?.join(', ') || 'Various'}</p>
+                                </div>
+                                
+                                <div className="rec-match-score">
+                                    <div className="match-percentage">
+                                        {Math.round((rec.finalScore || 0.5) * 100)}% Match
+                                    </div>
+                                    <div className="match-bar">
+                                        <div 
+                                            className="match-fill" 
+                                            style={{ width: `${(rec.finalScore || 0.5) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                                
+                                <div className="rec-explanations">
+                                    {(rec.explanations || ['Recommended for you']).slice(0, 2).map((explanation, idx) => (
+                                        <span key={idx} className="explanation-tag">
+                                            {explanation}
+                                        </span>
+                                    ))}
+                                </div>
+                                
+                                <div className="rec-restaurant-details">
+                                    <span className="rec-rating">⭐ {rec.restaurant.rating || 'New'}</span>
+                                    <span className="rec-delivery">{rec.restaurant.deliveryTime}</span>
+                                    <span className={`rec-price-range ${(rec.restaurant.priceRange || 'moderate').toLowerCase()}`}>
+                                        {rec.restaurant.priceRange || 'Moderate'}
+                                    </span>
+                                </div>
+                                
+                                {/* Favorite heart button */}
+                                <button 
+                                    className={`rec-favorite-heart ${getUserData(currentUser.id).favorites.includes(rec.restaurant._id) ? 'active' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFavorite(rec.restaurant._id);
+                                    }}
+                                >
+                                    {getUserData(currentUser.id).favorites.includes(rec.restaurant._id) ? '❤️' : '🤍'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="enhanced-rec-actions">
+                        <button 
+                            className="refresh-recommendations"
+                            onClick={() => {
+                                console.log('🔄 Refreshing recommendations...');
+                                fetchEnhancedRecommendations('6870b084e75152da7d6afb69');
+                            }}
+                            disabled={loadingEnhancedRecs}
+                        >
+                            🔄 Refresh Recommendations
+                        </button>
+                        <button 
+                            className="see-all-restaurants"
+                            onClick={() => {
+                                console.log('🏪 Showing all restaurants...');
+                                // Just scroll down to all restaurants
+                                const regularSection = document.querySelector('.regular-restaurants');
+                                if (regularSection) {
+                                    regularSection.scrollIntoView({ behavior: 'smooth' });
+                                }
+                            }}
+                        >
+                            🏪 See All Restaurants
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
   const generateEnhancedChatbotResponse = (userInput, userId) => {
   const userData = getUserData(userId);
   const lowerInput = userInput.toLowerCase();
@@ -768,6 +998,9 @@ function App() {
       response.quickReplies = ["Show popular", "Browse by cuisine", "Get recommendations"];
     }
   }
+
+  
+  
   
   // Handle "Favorites" button click
   else if (lowerInput.includes('favorites') || lowerInput.includes('favourite')) {
@@ -1422,19 +1655,22 @@ const ChatOrderHistory = ({ orders }) => {
 
   const toggleFavorite = (restaurantId) => {
     if (!currentUser) {
-      alert('Please login to add favorites');
-      return;
+        alert('Please login to add favorites');
+        return;
     }
     
     const userData = getUserData(currentUser.id);
     if (userData.favorites.includes(restaurantId)) {
-      removeFromUserFavorites(currentUser.id, restaurantId);
-      alert('Removed from favorites');
+        removeFromUserFavorites(currentUser.id, restaurantId);
+        alert('Removed from favorites');
     } else {
-      addToUserFavorites(currentUser.id, restaurantId);
-      alert('Added to favorites!');
+        addToUserFavorites(currentUser.id, restaurantId);
+        alert('Added to favorites!');
     }
-  };
+    
+    // Force re-render to update the heart icons
+    setSelectedRestaurant(selectedRestaurant ? {...selectedRestaurant} : null);
+};
 
   // ===== ENHANCED PLACE ORDER FUNCTION =====
   const placeOrder = async () => {
@@ -1727,85 +1963,98 @@ const ChatOrderHistory = ({ orders }) => {
             {/* Regular Customer View */}
             <div className="content">
               {!selectedRestaurant ? (
-                <div className="restaurants-section">
-                  <h2>Choose a Restaurant</h2>
-                  {loading ? (
-                    <p>Loading restaurants...</p>
-                  ) : restaurants && restaurants.length > 0 ? (
-                    <div className="restaurant-grid">
-                      {restaurants && restaurants.map(restaurant => (
+    <div className="restaurants-section">
+        {/* Debug component to verify React is working */}
+        {currentUser && !currentUser.isAdmin && (
+            <div style={{ 
+                background: '#f0f8ff', 
+                padding: '10px', 
+                margin: '10px 0', 
+                border: '1px solid #007bff',
+                borderRadius: '5px'
+            }}>
+                <h3>🔍 Debug Info</h3>
+                <p>User: {currentUser.name}</p>
+                <p>Recommendations loaded: {enhancedRecommendations.length}</p>
+                <p>Loading: {loadingEnhancedRecs ? 'Yes' : 'No'}</p>
+                <p>Should show enhanced section: {(!currentUser?.isAdmin) ? 'Yes' : 'No'}</p>
+            </div>
+        )}
+        
+        {/* Enhanced Recommendations Section */}
+        {currentUser && !currentUser.isAdmin && <EnhancedRecommendationsSection />}
+        
+        {/* Regular Restaurants Section */}
+        <div className="regular-restaurants">
+            <h2>All Restaurants</h2>
+            {loading ? (
+                <p>Loading restaurants...</p>
+            ) : restaurants && restaurants.length > 0 ? (
+                <div className="restaurant-grid">
+                    {restaurants.map(restaurant => (
                         <div 
-                          key={restaurant._id} 
-                          className="restaurant-card"
-                          onClick={() => selectRestaurant(restaurant)}
-                          style={{ position: 'relative' }}
+                            key={restaurant._id} 
+                            className="restaurant-card"
+                            onClick={() => selectRestaurant(restaurant)}
                         >
-                          <h3>{restaurant.name}</h3>
-                          <p className="cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Cuisine not specified'}</p>
-                          <div className="restaurant-info">
-                            <span>⭐ {restaurant.rating}</span>
-                            <span>{getPriceRangeDisplay(restaurant.priceRange)}</span>
-                            <span>🚚 {restaurant.deliveryTime}</span>
-                          </div>
-                          <p className="min-order">Min order: Rs. {restaurant.minimumOrder}</p>
-                          
-                          {/* Add trending/popular badge if available */}
-                          {restaurant.trendingBadge && (
-                            <div className="trending-badge">
-                              {restaurant.trendingBadge}
+                            <h3>{restaurant.name}</h3>
+                            <p className="cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Cuisine not specified'}</p>
+                            <div className="restaurant-info">
+                                <span>⭐ {restaurant.rating}</span>
+                                <span>{getPriceRangeDisplay(restaurant.priceRange)}</span>
+                                <span>🚚 {restaurant.deliveryTime}</span>
                             </div>
-                          )}
-                          
-                          {/* Favorite Heart Button - only show if user is logged in */}
-                          {currentUser && !currentUser.isAdmin && (
-                            <button
-                              className={`favorite-heart ${getUserData(currentUser.id).favorites.includes(restaurant._id) ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFavorite(restaurant._id);
-                              }}
-                              title={getUserData(currentUser.id).favorites.includes(restaurant._id) ? 'Remove from favorites' : 'Add to favorites'}
-                            >
-                              ❤️
-                            </button>
-                          )}
+                            <p className="min-order">Min order: Rs. {restaurant.minimumOrder}</p>
+                            
+                            {/* Add favorite button to regular restaurants too */}
+                            {currentUser && !currentUser.isAdmin && (
+                                <button 
+                                    className={`favorite-heart ${getUserData(currentUser.id).favorites.includes(restaurant._id) ? 'active' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFavorite(restaurant._id);
+                                    }}
+                                >
+                                    {getUserData(currentUser.id).favorites.includes(restaurant._id) ? '❤️' : '🤍'}
+                                </button>
+                            )}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p>No restaurants available. Please check if the backend server is running.</p>
-                  )}
+                    ))}
                 </div>
-              ) : (
+            ) : (
+                <p>No restaurants available. Please check if the backend server is running.</p>
+            )}
+        </div>
+    </div>
+) : (
                 <div className="menu-section">
-                  <button onClick={() => setSelectedRestaurant(null)} className="back-button">
-                    ← Back to Restaurants
-                  </button>
-                  <h2>{selectedRestaurant.name} Menu</h2>
-                  {menu && menu.length > 0 ? (
-                    <div className="menu-grid">
-                      {menu.map(item => (
-                        <div key={item._id} className="menu-item">
-                          <div className="item-info">
+        <button onClick={() => setSelectedRestaurant(null)} className="back-button">
+            ← Back to Restaurants
+        </button>
+        <h2>{selectedRestaurant.name} Menu</h2>
+        {menu && menu.length > 0 ? (
+            <div className="menu-grid">
+                {menu.map(item => (
+                    <div key={item._id} className="menu-item">
+                        <div className="item-info">
                             <h4>{item.name}</h4>
                             <p>{item.description}</p>
                             <p className="price">Rs. {item.price}</p>
-                          </div>
-                          <button 
+                        </div>
+                        <button 
                             onClick={() => addToCart(item)}
                             className="add-button"
-                          >
+                        >
                             Add +
-                          </button>
-                        </div>
-                      ))}
+                        </button>
                     </div>
-                  ) : (
-                    <p className="no-menu">No menu items available for this restaurant yet.</p>
-                  )}
-                </div>
-              )}
+                ))}
             </div>
+        ) : (
+            <p className="no-menu">No menu items available for this restaurant yet.</p>
+        )}
+    </div>
+)}
 
             <div className="cart-section">
               {/* Surge Status Banner */}
@@ -2620,5 +2869,5 @@ const ChatOrderHistory = ({ orders }) => {
     </div>
   );
 }
-}
+
 export default App;
