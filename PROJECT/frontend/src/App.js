@@ -1546,7 +1546,7 @@ const handleRecommendationClick = (restaurant) => {
   setTimeout(() => {
   alert(`🎉 Great choice! ${restaurant.name} is now selected. You can view their menu and add items to your cart.`);
 }, 500);
-
+};
 // Order history display component for chat
 const ChatOrderHistory = ({ orders }) => {
   if (!orders || orders.length === 0) return null;
@@ -2159,6 +2159,7 @@ const ChatOrderHistory = ({ orders }) => {
                 </>
               )}
             </div>
+            </div>
           </>
         )}
 
@@ -2195,8 +2196,8 @@ const ChatOrderHistory = ({ orders }) => {
                 </div>
               )}
 
-                // Update your chat messages JSX section to handle new response types
-// Find your messages.map() in the chat and update it:
+                {/* Update your chat messages JSX section to handle new response types */}
+{/* Find your messages.map() in the chat and update it: */}
 
 {messages.map((msg, index) => (
   <div key={index} className="message-container">
