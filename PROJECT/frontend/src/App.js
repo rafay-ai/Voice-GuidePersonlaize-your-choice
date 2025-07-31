@@ -372,6 +372,17 @@
       }
     ]);
 
+    // Add these with your other useState declarations
+const [chatOrderFlow, setChatOrderFlow] = useState({
+  active: false,
+  step: 'idle', // 'idle', 'selecting_restaurant', 'browsing_menu', 'building_cart', 'confirming_order'
+  selectedRestaurant: null,
+  cartItems: [],
+  savedAddress: null
+});
+const [chatLoading, setChatLoading] = useState(false);
+
+
     // NEW STATE VARIABLES FOR ENHANCED USER SYSTEM
     const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0);
     const [userPreferences, setUserPreferences] = useState({});
@@ -1206,96 +1217,263 @@ const handleOptionSelect = (option, questionKey) => {
         </div>
     );
 };
-    const generateEnhancedChatbotResponse = (userInput, userId) => {
-    const userData = getUserData(userId);
-    const lowerInput = userInput.toLowerCase();
-    
-    let response = {
-      role: 'bot',
-      timestamp: new Date().toLocaleTimeString()
-    };
+    // Enhanced Order-Capable Chatbot Response Generator
+const generateEnhancedChatbotResponse = (userInput, userId) => {
+  const userData = getUserData(userId);
+  const lowerInput = userInput.toLowerCase();
+  
+  let response = {
+    role: 'bot',
+    timestamp: new Date().toLocaleTimeString(),
+    orderAction: null
+  };
 
-    // Handle "Popular" button click
-    if (lowerInput.includes('popular') || lowerInput === 'popular restaurants') {
-      const popularRestaurants = getPopularRestaurants();
-      response.content = "🔥 Here are our most popular restaurants based on ratings, order count, and customer reviews:";
-      response.recommendations = popularRestaurants;
-      response.quickReplies = ["Order from these", "Show more restaurants", "My preferences"];
-    }
+  // ORDER INITIATION PATTERNS
+  if (lowerInput.includes('order') || lowerInput.includes('want to eat') || 
+      lowerInput.includes('hungry') || lowerInput.includes('craving')) {
     
-    // Handle "My Orders" button click
-    else if (lowerInput.includes('my orders') || lowerInput.includes('order history')) {
-      if (userData.orderHistory.length > 0) {
-        const recentOrders = userData.orderHistory.slice(0, 5);
-        response.content = `📋 You've placed ${userData.orderHistory.length} orders. Here are your recent orders:`;
-        response.orderHistory = recentOrders;
-        response.quickReplies = ["Reorder favorite", "Rate orders", "View all orders"];
-      } else {
-        response.content = "📋 You haven't placed any orders yet! Let me show you some great restaurants to get started:";
-        response.recommendations = restaurants.slice(0, 3);
-        response.quickReplies = ["Show popular", "Browse by cuisine", "Get recommendations"];
-      }
-    }
-
+    // Extract cuisine/food type from input
+    const foodKeywords = extractFoodFromInput(lowerInput);
     
-    
-    
-    // Handle "Favorites" button click
-    else if (lowerInput.includes('favorites') || lowerInput.includes('favourite')) {
-      if (userData.favorites.length > 0) {
-        const favoriteRestaurants = userData.favorites
-          .map(id => restaurants.find(r => r._id === id))
-          .filter(Boolean);
-        response.content = "❤️ Here are your favorite restaurants:";
-        response.recommendations = favoriteRestaurants;
-        response.quickReplies = ["Order from favorites", "Remove from favorites", "Add more favorites"];
-      } else {
-        response.content = "❤️ You haven't added any favorites yet. Try some restaurants and add them to your favorites by clicking the heart button! Here are some popular options:";
-        response.recommendations = getPopularRestaurants().slice(0, 3);
-        response.quickReplies = ["Show popular", "Browse restaurants", "Get recommendations"];
-      }
-    }
-    
-    // Handle recommendations request
-    else if (lowerInput.includes('recommend') || lowerInput.includes('suggest')) {
-      const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants);
-      
-      if (userData.behaviorData.totalOrders > 0) {
-        response.content = `🎯 Based on your ${userData.behaviorData.totalOrders} previous orders and preferences, here are my top picks:`;
-      } else {
-        response.content = "🎯 Based on your preferences, here are my personalized recommendations:";
-      }
-      response.recommendations = recommendations;
-      response.quickReplies = ["Order now", "Show more", "Update preferences"];
-    }
-    
-    // Handle cuisine-specific requests
-    else if (lowerInput.includes('biryani') || lowerInput.includes('pizza') || lowerInput.includes('burger') || lowerInput.includes('chinese')) {
-      const cuisine = extractCuisineFromInput(lowerInput);
-      const cuisineRestaurants = restaurants.filter(r => 
-        r.cuisine && r.cuisine.some(c => c.toLowerCase().includes(cuisine.toLowerCase()))
+    if (foodKeywords.length > 0) {
+      const matchingRestaurants = restaurants.filter(r => 
+        r.cuisine && r.cuisine.some(c => 
+          foodKeywords.some(food => c.toLowerCase().includes(food.toLowerCase()))
+        )
       ).slice(0, 4);
       
-      response.content = `🍽️ Great choice! Here are the best ${cuisine} restaurants:`;
-      response.recommendations = cuisineRestaurants;
-      response.quickReplies = ["Order now", "Show more cuisines", "Back to popular"];
+      if (matchingRestaurants.length > 0) {
+        response.content = `🍽️ Great! I found ${matchingRestaurants.length} restaurants for ${foodKeywords.join(' & ')}. Which one would you like to order from?`;
+        response.recommendations = matchingRestaurants;
+        response.orderAction = {
+          type: 'RESTAURANT_SELECTION',
+          restaurants: matchingRestaurants,
+          searchedFor: foodKeywords
+        };
+        response.quickReplies = ["Show menu", "Different cuisine", "Cancel order"];
+      } else {
+        response.content = "I couldn't find restaurants for that cuisine. Here are some popular options:";
+        response.recommendations = getPopularRestaurants().slice(0, 3);
+        response.quickReplies = ["Show all restaurants", "My favorites", "Recommend something"];
+      }
+    } else {
+      // General order request - show popular or recommended
+      const recommendations = userData.preferences && Object.keys(userData.preferences).length > 0 
+        ? enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants).slice(0, 4)
+        : getPopularRestaurants().slice(0, 4);
+      
+      response.content = "🍕 Perfect! I can help you place an order. Here are some great options:";
+      response.recommendations = recommendations;
+      response.orderAction = {
+        type: 'RESTAURANT_SELECTION',
+        restaurants: recommendations
+      };
+      response.quickReplies = ["Show menu", "Browse all restaurants", "My favorites"];
+    }
+  }
+  
+  // RESTAURANT SELECTION (when user clicks a restaurant card)
+  else if (lowerInput.startsWith('restaurant_selected:')) {
+    const restaurantId = lowerInput.split(':')[1];
+    const restaurant = restaurants.find(r => r._id === restaurantId);
+    
+    if (restaurant) {
+      response.content = `🏪 Great choice! ${restaurant.name} is known for excellent ${restaurant.cuisine?.join(' & ')}. Let me show you their menu:`;
+      response.orderAction = {
+        type: 'SHOW_MENU',
+        restaurant: restaurant,
+        restaurantId: restaurantId
+      };
+      response.quickReplies = ["Show popular items", "Add to cart", "Different restaurant"];
+    }
+  }
+  
+  // MENU ITEM SELECTION
+  else if (lowerInput.startsWith('add_item:')) {
+    const itemId = lowerInput.split(':')[1];
+    response.orderAction = {
+      type: 'ADD_TO_CART',
+      itemId: itemId
+    };
+    response.content = "✅ Added to cart! Want to add more items or proceed to checkout?";
+    response.quickReplies = ["Add more items", "View cart", "Checkout now", "Remove item"];
+  }
+  
+  // CART MANAGEMENT
+  else if (lowerInput.includes('cart') || lowerInput.includes('my order')) {
+    if (cart.length > 0) {
+      const total = calculateTotal();
+      response.content = `🛒 Your current order:\n\n${cart.map(item => 
+        `• ${item.name} x${item.quantity} - Rs. ${item.price * item.quantity}`
+      ).join('\n')}\n\n💰 Total: Rs. ${total.total} (including Rs. ${total.deliveryFee} delivery)`;
+      
+      response.orderAction = {
+        type: 'SHOW_CART',
+        items: cart,
+        total: total
+      };
+      response.quickReplies = ["Checkout now", "Add more items", "Remove items", "Clear cart"];
+    } else {
+      response.content = "🛒 Your cart is empty. Would you like to browse restaurants?";
+      response.quickReplies = ["Browse restaurants", "Show recommendations", "Popular items"];
+    }
+  }
+  
+  // CHECKOUT INITIATION
+  else if (lowerInput.includes('checkout') || lowerInput.includes('place order') || 
+           lowerInput.includes('confirm order')) {
+    
+    if (!currentUser) {
+      response.content = "🔐 Please login first to place an order. I'll save your cart for you!";
+      response.quickReplies = ["Login now", "Create account", "Continue browsing"];
+      return response;
     }
     
-    // Handle stats request
-    else if (lowerInput.includes('stats') || lowerInput.includes('my data')) {
-      const stats = userData.behaviorData;
-      response.content = `📊 Your Food Journey:\n\n🛒 Total Orders: ${stats.totalOrders}\n💰 Total Spent: Rs. ${stats.totalSpent}\n📈 Average Order: Rs. ${Math.round(stats.averageOrderValue)}\n🍽️ Favorite Cuisine: ${stats.mostOrderedCuisine || 'Still discovering!'}\n❤️ Favorites: ${userData.favorites.length} restaurants`;
-      response.quickReplies = ["View favorites", "Order history", "Get recommendations"];
+    if (cart.length === 0) {
+      response.content = "🛒 Your cart is empty! Let me help you find something delicious.";
+      response.recommendations = getPopularRestaurants().slice(0, 3);
+      response.quickReplies = ["Browse restaurants", "Show recommendations"];
+      return response;
     }
     
-    // Default response with helpful options
-    else {
-      response.content = "I'm here to help you discover amazing food! What would you like to do?";
-      response.quickReplies = ["Show popular restaurants", "Get recommendations", "Browse by cuisine", "My order history"];
+    // Check for saved address
+    const savedAddress = getSavedUserAddress(currentUser.id);
+    
+    if (savedAddress) {
+      const total = calculateTotal();
+      response.content = `📋 Order Summary:\n\n${cart.map(item => 
+        `• ${item.name} x${item.quantity} - Rs. ${item.price * item.quantity}`
+      ).join('\n')}\n\n📍 Delivery to: ${savedAddress.street}, ${savedAddress.area}\n💰 Total: Rs. ${total.total}\n\n🤖 Shall I place this order for you?`;
+      
+      response.orderAction = {
+        type: 'CONFIRM_ORDER',
+        items: cart,
+        address: savedAddress,
+        total: total
+      };
+      response.quickReplies = ["Yes, place order!", "Change address", "Modify order", "Cancel"];
+    } else {
+      response.content = "📍 I need your delivery address to place the order. Please provide:";
+      response.orderAction = {
+        type: 'COLLECT_ADDRESS'
+      };
+      response.quickReplies = ["Enter address manually", "Use current location", "Cancel order"];
     }
+  }
+  
+  // ADDRESS COLLECTION
+  else if (lowerInput.includes('address:') || lowerInput.includes('deliver to:')) {
+    const addressText = lowerInput.split(/address:|deliver to:/)[1]?.trim();
+    if (addressText) {
+      const parsedAddress = parseAddressFromText(addressText);
+      
+      response.content = `📍 Address saved: ${parsedAddress.street}, ${parsedAddress.area}\n\n✅ Ready to place your order! Total: Rs. ${calculateTotal().total}`;
+      response.orderAction = {
+        type: 'ADDRESS_CONFIRMED',
+        address: parsedAddress
+      };
+      response.quickReplies = ["Place order now!", "Change address", "View order"];
+    }
+  }
+  
+  // ORDER CONFIRMATION
+  else if (lowerInput.includes('yes, place order') || lowerInput.includes('confirm')) {
+    response.orderAction = {
+      type: 'PLACE_ORDER_NOW'
+    };
+    response.content = "🚀 Placing your order now... This will take a moment!";
+  }
+  
+  // EXISTING RESPONSES (keep your current ones)
+  else if (lowerInput.includes('popular')) {
+    const popularRestaurants = getPopularRestaurants();
+    response.content = "🔥 Here are our most popular restaurants:";
+    response.recommendations = popularRestaurants;
+    response.quickReplies = ["Order from these", "Show menus", "My preferences"];
+  }
+  
+  else if (lowerInput.includes('my orders') || lowerInput.includes('order history')) {
+    if (userData.orderHistory.length > 0) {
+      const recentOrders = userData.orderHistory.slice(0, 5);
+      response.content = `📋 Your recent orders:`;
+      response.orderHistory = recentOrders;
+      response.quickReplies = ["Reorder favorite", "Rate orders", "Track current order"];
+    } else {
+      response.content = "📋 No previous orders found. Let's order something delicious!";
+      response.recommendations = restaurants.slice(0, 3);
+      response.quickReplies = ["Browse restaurants", "Show recommendations"];
+    }
+  }
+  
+  else if (lowerInput.includes('favorites')) {
+    if (userData.favorites.length > 0) {
+      const favoriteRestaurants = userData.favorites
+        .map(id => restaurants.find(r => r._id === id))
+        .filter(Boolean);
+      response.content = "❤️ Your favorite restaurants:";
+      response.recommendations = favoriteRestaurants;
+      response.quickReplies = ["Order from favorites", "Browse all", "Add more favorites"];
+    } else {
+      response.content = "❤️ No favorites yet. Try some restaurants and add them to favorites!";
+      response.recommendations = getPopularRestaurants().slice(0, 3);
+      response.quickReplies = ["Browse restaurants", "Show recommendations"];
+    }
+  }
+  
+  // DEFAULT RESPONSE
+  else {
+    response.content = "🍕 I'm your food ordering assistant! I can help you:\n\n🛒 Place orders\n🔍 Find restaurants\n⭐ Show recommendations\n📋 Check order history\n\nWhat would you like to do?";
+    response.quickReplies = ["Order food now", "Show recommendations", "Popular restaurants", "My favorites"];
+  }
 
-    return response;
+  return response;
+};
+
+// Helper function to extract food types from user input
+const extractFoodFromInput = (input) => {
+  const foodKeywords = {
+    'biryani': 'Biryani',
+    'pizza': 'Pizza', 
+    'burger': 'Burger',
+    'chinese': 'Chinese',
+    'desi': 'Pakistani',
+    'pakistani': 'Pakistani',
+    'fast food': 'Fast Food',
+    'bbq': 'BBQ',
+    'karahi': 'Pakistani',
+    'kebab': 'BBQ',
+    'sandwich': 'Sandwich',
+    'pasta': 'Italian',
+    'italian': 'Italian'
   };
+  
+  const found = [];
+  for (const [keyword, cuisine] of Object.entries(foodKeywords)) {
+    if (input.includes(keyword)) {
+      found.push(cuisine);
+    }
+  }
+  return [...new Set(found)]; // Remove duplicates
+};
+
+// Helper function to parse address from text
+const parseAddressFromText = (addressText) => {
+  // Simple address parsing - you can make this more sophisticated
+  const parts = addressText.split(',').map(p => p.trim());
+  
+  return {
+    street: parts[0] || addressText,
+    area: parts[1] || 'Karachi',
+    city: 'Karachi',
+    instructions: parts.length > 2 ? parts.slice(2).join(', ') : ''
+  };
+};
+
+// Helper function to get saved user address
+const getSavedUserAddress = (userId) => {
+  const saved = localStorage.getItem(`address_${userId}`);
+  return saved ? JSON.parse(saved) : null;
+};
 
   // Function to get popular restaurants based on multiple factors
   const getPopularRestaurants = () => {
@@ -1450,39 +1628,32 @@ const handleOptionSelect = (option, questionKey) => {
     };
 
     const sendMessage = async () => {
-    if (!inputMessage.trim()) return;
+  if (!inputMessage.trim()) return;
 
-    const userMsg = {
-      role: 'user',
-      content: inputMessage,
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
-    const currentInput = inputMessage;
-    setInputMessage('');
-    setIsTyping(true);
-
-    // First try the enhanced chatbot response
-    setTimeout(() => {
-      setIsTyping(false);
-      
-      // Use enhanced response for specific commands
-      if (currentInput.toLowerCase().includes('popular') || 
-          currentInput.toLowerCase().includes('my orders') || 
-          currentInput.toLowerCase().includes('favorites') ||
-          currentInput.toLowerCase().includes('recommend') ||
-          currentInput.toLowerCase().includes('stats')) {
-        
-        const response = generateEnhancedChatbotResponse(currentInput.toLowerCase(), currentUser?.id || 'guest');
-        setMessages(prev => [...prev, response]);
-      } else {
-        // Fallback to existing chatbot or simple response
-        const response = generatePersonalizedResponse(currentInput.toLowerCase(), currentUser?.id || 'guest');
-        setMessages(prev => [...prev, response]);
-      }
-    }, 1000);
+  const userMsg = {
+    role: 'user',
+    content: inputMessage,
+    timestamp: new Date().toLocaleTimeString()
   };
+  
+  setMessages(prev => [...prev, userMsg]);
+  const currentInput = inputMessage;
+  setInputMessage('');
+  setIsTyping(true);
+
+  setTimeout(async () => {
+    setIsTyping(false);
+    
+    // Generate response
+    const response = generateEnhancedChatbotResponse(currentInput.toLowerCase(), currentUser?.id || 'guest');
+    setMessages(prev => [...prev, response]);
+    
+    // Handle order actions
+    if (response.orderAction) {
+      await handleChatOrderAction(response.orderAction, response.orderAction);
+    }
+  }, 1000);
+};
 
   // 2. Add function to handle special chat responses
   const handleSpecialChatResponse = (responseData) => {
@@ -2447,108 +2618,173 @@ const syncUserActionWithDataManager = (action, data) => {
   {/* Find your messages.map() in the chat and update it: */}
 
   {messages.map((msg, index) => (
-    <div key={index} className="message-container">
-      <div className={`message ${msg.role}`}>
-        <div className="message-content">
-          {msg.content}
-        </div>
-        <div className="message-time">{msg.timestamp}</div>
+  <div key={index} className="message-container">
+    <div className={`message ${msg.role}`}>
+      <div className="message-content">
+        {msg.content}
       </div>
-
-      {/* Quick Replies */}
-      {msg.quickReplies && (
-        <div className="quick-replies">
-          {msg.quickReplies.map((reply, idx) => (
-            <button
-              key={idx}
-              className="quick-reply-btn"
-              onClick={() => handleEnhancedQuickReply(reply)}
-            >
-              {reply}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Restaurant Recommendations */}
-      {msg.recommendations && msg.recommendations.length > 0 && (
-        <div className="chat-recommendations">
-          {msg.recommendations.map((restaurant, idx) => (
-            <div 
-              key={idx} 
-              className="recommendation-card"
-              onClick={() => handleRecommendationClick(restaurant)}
-            >
-              <div className="rec-header">
-                <h4>{restaurant.name}</h4>
-                <div className="rec-rating">⭐ {restaurant.rating}</div>
-              </div>
-              <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
-              <div className="rec-info">
-                <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
-                <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
-              </div>
-              
-              {/* Show trending badge */}
-              {restaurant.trendingBadge && (
-                <div className="trending-badge-chat">
-                  {restaurant.trendingBadge}
-                </div>
-              )}
-              
-              {/* Show order count for popular restaurants */}
-              {restaurant.orderCount && (
-                <div className="order-count">
-                  📦 {restaurant.orderCount}+ orders
-                </div>
-              )}
-              
-              {restaurant.personalizedReason && (
-                <div className="recommendation-reason">
-                  {restaurant.personalizedReason}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Order History Display */}
-      {msg.orderHistory && (
-        <ChatOrderHistory orders={msg.orderHistory} />
-      )}
-
-      {/* Onboarding options (keep existing) */}
-      {msg.questionData && msg.isOnboarding && (
-    <div className="onboarding-options">
-      <p style={{marginBottom: '10px', fontWeight: 'bold', color: '#667eea'}}>
-        Please select an option:
-      </p>
-      {msg.questionData.options.map((option, idx) => (
-        <button
-          key={idx}
-          className="option-button"
-          onClick={() => {
-            console.log('🎯 Option selected:', option);
-            handleOptionSelect(option, msg.questionData.key);
-          }}
-          style={{
-            margin: '5px',
-            padding: '10px 15px',
-            backgroundColor: '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer'
-          }}
-        >
-          {option}
-        </button>
-          ))}
-        </div>
-      )}
+      <div className="message-time">{msg.timestamp}</div>
     </div>
-  ))}
+
+    {/* Quick Replies */}
+    {msg.quickReplies && (
+      <div className="quick-replies">
+        {msg.quickReplies.map((reply, idx) => (
+          <button
+            key={idx}
+            className="quick-reply-btn"
+            onClick={() => handleEnhancedQuickReply(reply)}
+          >
+            {reply}
+          </button>
+        ))}
+      </div>
+    )}
+
+    {/* Restaurant Recommendations with Order Capability */}
+    {msg.recommendations && msg.recommendations.length > 0 && (
+      <div className="chat-recommendations">
+        {msg.recommendations.map((restaurant, idx) => (
+          <div 
+            key={idx} 
+            className="recommendation-card order-capable"
+            onClick={() => {
+              // Instead of just selecting, start order flow
+              const orderMessage = `restaurant_selected:${restaurant._id}`;
+              setInputMessage(orderMessage);
+              sendMessage();
+            }}
+          >
+            <div className="rec-header">
+              <h4>{restaurant.name}</h4>
+              <div className="rec-rating">⭐ {restaurant.rating}</div>
+            </div>
+            <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
+            <div className="rec-info">
+              <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
+              <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
+            </div>
+            
+            {/* Order button */}
+            <button 
+              className="chat-order-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                const orderMessage = `restaurant_selected:${restaurant._id}`;
+                setInputMessage(orderMessage);
+                sendMessage();
+              }}
+            >
+              🛒 View Menu & Order
+            </button>
+            
+            {restaurant.trendingBadge && (
+              <div className="trending-badge-chat">
+                {restaurant.trendingBadge}
+              </div>
+            )}
+            
+            {restaurant.personalizedReason && (
+              <div className="recommendation-reason">
+                {restaurant.personalizedReason}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* Menu Items Display */}
+    {msg.menuItems && msg.menuItems.length > 0 && (
+      <div className="chat-menu-items">
+        <div className="menu-header">
+          <h4>🍽️ Available Items:</h4>
+        </div>
+        {msg.menuItems.map((item, idx) => (
+          <div key={idx} className="chat-menu-item">
+            <div className="menu-item-info">
+              <h5>{item.name}</h5>
+              <p className="item-description">{item.description}</p>
+              <span className="item-price">Rs. {item.price}</span>
+            </div>
+            <div className="menu-item-actions">
+              <button 
+                className="add-item-btn"
+                onClick={() => {
+                  const addMessage = `add_item:${item._id}`;
+                  setInputMessage(addMessage);
+                  sendMessage();
+                }}
+              >
+                Add + 
+              </button>
+            </div>
+          </div>
+        ))}
+        <div className="menu-actions">
+          <button 
+            className="view-full-menu-btn"
+            onClick={() => {
+              setShowChat(false);
+              if (selectedRestaurant) {
+                // Already have restaurant selected from chat
+              }
+            }}
+          >
+            📋 View Full Menu
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Order History Display (keep existing) */}
+    {msg.orderHistory && (
+      <ChatOrderHistory orders={msg.orderHistory} />
+    )}
+
+    {/* Onboarding options (keep existing) */}
+    {msg.questionData && msg.isOnboarding && (
+      <div className="onboarding-options">
+        <p style={{marginBottom: '10px', fontWeight: 'bold', color: '#667eea'}}>
+          Please select an option:
+        </p>
+        {msg.questionData.options.map((option, idx) => (
+          <button
+            key={idx}
+            className="option-button"
+            onClick={() => {
+              console.log('🎯 Option selected:', option);
+              handleOptionSelect(option, msg.questionData.key);
+            }}
+            style={{
+              margin: '5px',
+              padding: '10px 15px',
+              backgroundColor: '#667eea',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    )}
+
+    {/* Loading indicator for order processing */}
+    {chatLoading && index === messages.length - 1 && (
+      <div className="chat-loading">
+        <div className="loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <span>Processing your order...</span>
+      </div>
+    )}
+  </div>
+))}
 
 
                   {isTyping && (
