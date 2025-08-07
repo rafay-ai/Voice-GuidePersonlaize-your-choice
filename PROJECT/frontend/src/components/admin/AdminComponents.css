@@ -1007,10 +1007,6 @@
   background: #f59e0b;
 }
 
-.badge.status {
-  /* Color set dynamically via style attribute */
-}
-
 .restaurant-info {
   margin-bottom: 16px;
 }

@@ -4913,3 +4913,245 @@ body {
     padding: 12px 12px;
   }
 }
+
+/* Enhanced Chat Order Styles */
+.recommendation-card.order-capable {
+  border: 2px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.recommendation-card.order-capable:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+}
+
+.chat-order-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.chat-order-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* Menu Items in Chat */
+.chat-menu-items {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid #e5e7eb;
+}
+
+.menu-header h4 {
+  color: #374151;
+  margin: 0 0 12px 0;
+  font-size: 1.1rem;
+}
+
+.chat-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.menu-item-info h5 {
+  color: #1f2937;
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+}
+
+.item-description {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0 0 4px 0;
+}
+
+.item-price {
+  color: #059669;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.add-item-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-item-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.view-full-menu-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.chat-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-style: italic;
+  margin: 8px 0;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 2px;
+}
+
+.loading-dots span {
+  width: 4px;
+  height: 4px;
+  background: #667eea;
+  border-radius: 50%;
+  animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+.chat-menu-items {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid #e5e7eb;
+}
+
+.chat-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.chat-menu-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.menu-item-info h5 {
+  color: #1f2937;
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+}
+
+.item-description {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0 0 4px 0;
+}
+
+.item-price {
+  color: #059669;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.add-item-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-item-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.chat-cart-summary {
+  background: linear-gradient(135deg, #fff3e0, #ffeaa7);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  border-left: 4px solid #f39c12;
+}
+
+.chat-cart-summary h4 {
+  color: #e67e22;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.cart-item-summary {
+  padding: 4px 0;
+  font-size: 0.9rem;
+  color: #2c3e50;
+}
+
+.cart-total-summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 2px solid rgba(230, 126, 34, 0.3);
+  color: #e67e22;
+  font-size: 1rem;
+}
+
+.chat-actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.chat-action-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-action-btn:hover {
+  background: #5a67d8;
+  transform: translateY(-1px);
+}

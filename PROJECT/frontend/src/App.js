@@ -1642,18 +1642,94 @@ const getSavedUserAddress = (userId) => {
   setIsTyping(true);
 
   setTimeout(async () => {
-    setIsTyping(false);
-    
-    // Generate response
-    const response = generateEnhancedChatbotResponse(currentInput.toLowerCase(), currentUser?.id || 'guest');
-    setMessages(prev => [...prev, response]);
-    
-    // Handle order actions
-    if (response.orderAction) {
-      await handleChatOrderAction(response.orderAction, response.orderAction);
+    try {
+      console.log('📤 Sending message to chatbot:', currentInput);
+      
+      // Send to enhanced chatbot API
+      const response = await fetch('http://localhost:5000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: currentInput,
+          userId: currentUser?.id || 'guest',
+          sessionData: {}
+        })
+      });
+
+      console.log('📥 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('📦 Chatbot response data:', data);
+      
+      setIsTyping(false);
+      
+      if (data.success) {
+        const botResponse = {
+          role: 'bot',
+          content: data.bot_response,
+          timestamp: new Date().toLocaleTimeString(),
+          type: data.response_type,
+          restaurants: data.data?.restaurants || [],
+          menuItems: data.data?.menuItems || [],
+          suggestions: data.data?.suggestions || [],
+          actions: data.data?.actions || [],
+          cartItems: data.data?.cartItems || [],
+          cartTotal: data.data?.cartTotal || 0
+        };
+        
+        setMessages(prev => [...prev, botResponse]);
+        
+        // Handle special responses
+        if (data.data?.type === 'restaurant_selected_with_menu' && data.data?.restaurant) {
+          console.log('🏪 Auto-selecting restaurant:', data.data.restaurant.name);
+          setSelectedRestaurant(data.data.restaurant);
+          if (data.data.menuItems && data.data.menuItems.length > 0) {
+            setMenu(data.data.menuItems);
+          }
+        }
+        
+        if (data.data?.type === 'item_added_to_cart' && data.data?.cartItems) {
+          console.log('🛒 Updating cart from chatbot');
+          const updatedCart = data.data.cartItems.map(item => ({
+            _id: item.menuItem._id,
+            name: item.menuItem.name,
+            price: item.price,
+            quantity: item.quantity
+          }));
+          setCart(updatedCart);
+        }
+        
+      } else {
+        console.warn('Chatbot response not successful:', data);
+        // Fallback response
+        const fallbackResponse = {
+          role: 'bot',
+          content: "I'm here to help you order delicious food! What would you like to eat today? 🍕",
+          timestamp: new Date().toLocaleTimeString(),
+          suggestions: ['I want pizza', 'Show restaurants', 'Order food']
+        };
+        setMessages(prev => [...prev, fallbackResponse]);
+      }
+      
+    } catch (error) {
+      console.error('❌ Chat error:', error);
+      setIsTyping(false);
+      
+      const errorResponse = {
+        role: 'bot',
+        content: "Sorry, I'm having trouble right now. Try saying 'I want pizza' or 'Show restaurants'! 🤖",
+        timestamp: new Date().toLocaleTimeString(),
+        suggestions: ['I want pizza', 'Show restaurants', 'Order food']
+      };
+      setMessages(prev => [...prev, errorResponse]);
     }
   }, 1000);
 };
+
 
   // 2. Add function to handle special chat responses
   const handleSpecialChatResponse = (responseData) => {
@@ -1888,6 +1964,70 @@ const getSavedUserAddress = (userId) => {
     }
   };
 
+  // ADD this new function for handling menu item clicks from chat:
+const handleChatMenuItemClick = (menuItem) => {
+  console.log('🍽️ Menu item selected from chat:', menuItem.name);
+
+  // Send item selection to chatbot
+  const itemMessage = `add_item:${menuItem._id}`;
+  
+  // Add user message
+  const userMsg = {
+    role: 'user',
+    content: `Add ${menuItem.name} to cart`,
+    timestamp: new Date().toLocaleTimeString()
+  };
+  setMessages(prev => [...prev, userMsg]);
+
+  // Send to backend
+  setIsTyping(true);
+  setTimeout(async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: itemMessage,
+          userId: currentUser?.id || 'guest',
+          sessionData: {}
+        })
+      });
+
+      const data = await response.json();
+      setIsTyping(false);
+      
+      if (data.success) {
+        const botResponse = {
+          role: 'bot',
+          content: data.bot_response,
+          timestamp: new Date().toLocaleTimeString(),
+          type: data.response_type,
+          cartItems: data.data?.cartItems || [],
+          cartTotal: data.data?.cartTotal || 0,
+          suggestions: data.data?.suggestions || [],
+          actions: data.data?.actions || []
+        };
+        
+        setMessages(prev => [...prev, botResponse]);
+        
+        // Update cart in main app
+        if (data.data?.cartItems) {
+          const updatedCart = data.data.cartItems.map(item => ({
+            _id: item.menuItem._id,
+            name: item.menuItem.name,
+            price: item.price,
+            quantity: item.quantity
+          }));
+          setCart(updatedCart);
+        }
+      }
+    } catch (error) {
+      console.error('Menu item selection error:', error);
+      setIsTyping(false);
+    }
+  }, 500);
+};
+
   // 5. Add function to handle chat order actions
   const handleChatOrderAction = async (action, orderData) => {
     try {
@@ -1959,17 +2099,65 @@ const getSavedUserAddress = (userId) => {
     // Enhanced recommendation card click handler
   // Enhanced recommendation card click handler
   const handleRecommendationClick = (restaurant) => {
-    console.log('🏪 Restaurant selected from chat:', restaurant.name);
+  console.log('🏪 Restaurant selected from chat:', restaurant.name);
 
-    // Close chat and select restaurant
-    setShowChat(false);
-    selectRestaurant(restaurant);
-
-    // Add a helpful message
-    setTimeout(() => {
-    alert(`🎉 Great choice! ${restaurant.name} is now selected. You can view their menu and add items to your cart.`);
-  }, 500);
+  // Send restaurant selection to chatbot
+  const restaurantMessage = `restaurant_selected:${restaurant._id}`;
+  
+  // Add user message
+  const userMsg = {
+    role: 'user',
+    content: `I want to order from ${restaurant.name}`,
+    timestamp: new Date().toLocaleTimeString()
   };
+  setMessages(prev => [...prev, userMsg]);
+
+  // Send to backend
+  setIsTyping(true);
+  setTimeout(async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: restaurantMessage,
+          userId: currentUser?.id || 'guest',
+          sessionData: {}
+        })
+      });
+
+      const data = await response.json();
+      setIsTyping(false);
+      
+      if (data.success) {
+        const botResponse = {
+          role: 'bot',
+          content: data.bot_response,
+          timestamp: new Date().toLocaleTimeString(),
+          type: data.response_type,
+          restaurants: data.data?.restaurants || [],
+          menuItems: data.data?.menuItems || [],
+          suggestions: data.data?.suggestions || [],
+          actions: data.data?.actions || []
+        };
+        
+        setMessages(prev => [...prev, botResponse]);
+        
+        // Auto-select restaurant and show menu
+        setSelectedRestaurant(restaurant);
+        if (data.data?.menuItems && data.data.menuItems.length > 0) {
+          setMenu(data.data.menuItems);
+        } else {
+          fetchMenu(restaurant._id);
+        }
+        
+      }
+    } catch (error) {
+      console.error('Restaurant selection error:', error);
+      setIsTyping(false);
+    }
+  }, 500);
+};
   // Order history display component for chat
   const ChatOrderHistory = ({ orders }) => {
     if (!orders || orders.length === 0) return null;
@@ -2695,47 +2883,207 @@ const syncUserActionWithDataManager = (action, data) => {
     )}
 
     {/* Menu Items Display */}
-    {msg.menuItems && msg.menuItems.length > 0 && (
-      <div className="chat-menu-items">
-        <div className="menu-header">
-          <h4>🍽️ Available Items:</h4>
+{msg.menuItems && msg.menuItems.length > 0 && (
+  <div className="chat-menu-items">
+    <div className="menu-header">
+      <h4>🍽️ Available Items:</h4>
+    </div>
+    {msg.menuItems.map((item, idx) => (
+      <div key={idx} className="chat-menu-item">
+        <div className="menu-item-info">
+          <h5>{item.name}</h5>
+          <p className="item-description">{item.description}</p>
+          <span className="item-price">Rs. {item.price}</span>
         </div>
-        {msg.menuItems.map((item, idx) => (
-          <div key={idx} className="chat-menu-item">
-            <div className="menu-item-info">
-              <h5>{item.name}</h5>
-              <p className="item-description">{item.description}</p>
-              <span className="item-price">Rs. {item.price}</span>
-            </div>
-            <div className="menu-item-actions">
-              <button 
-                className="add-item-btn"
-                onClick={() => {
-                  const addMessage = `add_item:${item._id}`;
-                  setInputMessage(addMessage);
-                  sendMessage();
-                }}
-              >
-                Add + 
-              </button>
-            </div>
-          </div>
-        ))}
-        <div className="menu-actions">
+        <div className="menu-item-actions">
           <button 
-            className="view-full-menu-btn"
-            onClick={() => {
-              setShowChat(false);
-              if (selectedRestaurant) {
-                // Already have restaurant selected from chat
-              }
-            }}
+            className="add-item-btn"
+            onClick={() => handleChatMenuItemClick(item)}
           >
-            📋 View Full Menu
+            Add to Cart
           </button>
         </div>
       </div>
+    ))}
+  </div>
+)}
+
+{/* Restaurant Recommendations with Order Capability - FIXED VERSION */}
+{msg.restaurants && msg.restaurants.length > 0 && (
+  <div className="chat-recommendations">
+    {msg.restaurants.map((restaurant, idx) => (
+      <div 
+        key={idx} 
+        className="recommendation-card order-capable"
+      >
+        <div className="rec-header">
+          <h4>{restaurant.name}</h4>
+          <div className="rec-rating">⭐ {restaurant.rating || 'New'}</div>
+        </div>
+        <p className="rec-cuisine">{restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}</p>
+        <div className="rec-info">
+          <span className="rec-price">{getPriceRangeDisplay(restaurant.priceRange)}</span>
+          <span className="rec-delivery">🚚 {restaurant.deliveryTime}</span>
+        </div>
+        
+        {/* FIXED: The button that was causing "Unknown action" */}
+        <button 
+          className="chat-order-btn"
+          onClick={async (e) => {
+            e.stopPropagation();
+            console.log('🍕 View Menu & Order clicked for:', restaurant.name);
+            
+            // Send restaurant selection message to chatbot
+            const userMsg = {
+              role: 'user',
+              content: `I want to order from ${restaurant.name}`,
+              timestamp: new Date().toLocaleTimeString()
+            };
+            setMessages(prev => [...prev, userMsg]);
+            
+            setIsTyping(true);
+            
+            try {
+              const response = await fetch('http://localhost:5000/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  message: `restaurant_selected:${restaurant._id}`,
+                  userId: currentUser?.id || 'guest',
+                  sessionData: {}
+                })
+              });
+
+              const data = await response.json();
+              setIsTyping(false);
+              
+              if (data.success) {
+                const botResponse = {
+                  role: 'bot',
+                  content: data.bot_response,
+                  timestamp: new Date().toLocaleTimeString(),
+                  type: data.response_type,
+                  restaurants: data.data?.restaurants || [],
+                  menuItems: data.data?.menuItems || [],
+                  suggestions: data.data?.suggestions || [],
+                  actions: data.data?.actions || []
+                };
+                
+                setMessages(prev => [...prev, botResponse]);
+                
+                // Auto-select restaurant in main app
+                setSelectedRestaurant(restaurant);
+                
+                // Fetch and set menu
+                if (data.data?.menuItems && data.data.menuItems.length > 0) {
+                  setMenu(data.data.menuItems);
+                } else {
+                  // Fallback: fetch menu manually
+                  try {
+                    const menuResponse = await fetch(`http://localhost:5000/api/menu/${restaurant._id}`);
+                    const menuData = await menuResponse.json();
+                    if (menuData.success && menuData.items) {
+                      setMenu(menuData.items);
+                    }
+                  } catch (menuError) {
+                    console.error('Menu fetch error:', menuError);
+                  }
+                }
+                
+              } else {
+                console.error('Chatbot response error:', data);
+                setIsTyping(false);
+              }
+            } catch (error) {
+              console.error('Restaurant selection error:', error);
+              setIsTyping(false);
+              
+              // Fallback: still select restaurant in main app
+              setSelectedRestaurant(restaurant);
+              fetchMenu(restaurant._id);
+              
+              const fallbackResponse = {
+                role: 'bot',
+                content: `Great choice! ${restaurant.name} selected. You can now view their menu in the main app!`,
+                timestamp: new Date().toLocaleTimeString(),
+                suggestions: ['Add items to cart', 'View menu', 'Different restaurant']
+              };
+              setMessages(prev => [...prev, fallbackResponse]);
+            }
+          }}
+        >
+          🛒 View Menu & Order
+        </button>
+        
+        {restaurant.trendingBadge && (
+          <div className="trending-badge-chat">
+            {restaurant.trendingBadge}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+)}
+
+{/* Cart Summary Display */}
+{msg.cartItems && msg.cartItems.length > 0 && (
+  <div className="chat-cart-summary">
+    <h4>🛒 Your Cart</h4>
+    {msg.cartItems.map((item, idx) => (
+      <div key={idx} className="cart-item-summary">
+        {item.menuItem.name} x{item.quantity} - Rs. {item.price * item.quantity}
+      </div>
+    ))}
+    {msg.cartTotal && (
+      <div className="cart-total-summary">
+        <strong>Subtotal: Rs. {msg.cartTotal}</strong>
+      </div>
     )}
+  </div>
+)}
+
+{/* Enhanced Quick Replies */}
+{msg.suggestions && msg.suggestions.length > 0 && (
+  <div className="quick-replies">
+    {msg.suggestions.map((suggestion, idx) => (
+      <button
+        key={idx}
+        className="quick-reply-btn"
+        onClick={() => {
+          setInputMessage(suggestion);
+          sendMessage();
+        }}
+      >
+        {suggestion}
+      </button>
+    ))}
+  </div>
+)}
+
+{/* Action Buttons */}
+{msg.actions && msg.actions.length > 0 && (
+  <div className="chat-actions">
+    {msg.actions.map((action, idx) => (
+      <button
+        key={idx}
+        className="chat-action-btn"
+        onClick={() => {
+          if (action === 'Checkout' && cart.length > 0) {
+            setShowCheckout(true);
+            setShowChat(false);
+          } else if (action === 'View Menu' && selectedRestaurant) {
+            setShowChat(false);
+          } else {
+            setInputMessage(action);
+            sendMessage();
+          }
+        }}
+      >
+        {action}
+      </button>
+    ))}
+  </div>
+)}
 
     {/* Order History Display (keep existing) */}
     {msg.orderHistory && (
