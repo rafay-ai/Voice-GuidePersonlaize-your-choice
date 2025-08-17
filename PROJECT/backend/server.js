@@ -66,7 +66,7 @@ app.get('/api/recommendations/advanced/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         const { 
-            count = 6,  // Reduced for testing
+            count = 6,
             includeNew = 'true',
             diversityFactor = 0.3 
         } = req.query;
@@ -83,17 +83,17 @@ app.get('/api/recommendations/advanced/:userId', async (req, res) => {
             });
         }
         
-        // Check if method exists
-        if (typeof advancedRecommendation.getPersonalizedRecommendations !== 'function') {
-            console.error('❌ getPersonalizedRecommendations method not available');
-            return res.status(500).json({
-                success: false,
-                message: 'Recommendation method not available',
-                error: 'Method not found'
-            });
-        }
-        
         console.log('🔄 Calling recommendation service...');
+        
+        // Get user info for debugging (safe handling)
+        let userInfo = null;
+        try {
+            if (userId && userId.match(/^[0-9a-fA-F]{24}$/)) {
+                userInfo = await User.findById(userId);
+            }
+        } catch (err) {
+            console.log('⚠️ Could not fetch user info:', err.message);
+        }
         
         const recommendations = await advancedRecommendation.getPersonalizedRecommendations(
             userId, 
@@ -107,18 +107,128 @@ app.get('/api/recommendations/advanced/:userId', async (req, res) => {
             }
         );
         
-        console.log('✅ Recommendations generated successfully:', recommendations.length);
+        console.log('✅ Raw recommendations received:', recommendations.length);
+        
+        // SAFE PROCESSING: Handle both success and empty cases
+        if (!recommendations || !Array.isArray(recommendations)) {
+            console.log('⚠️ Invalid recommendations format, using fallback');
+            
+            // Try to get fallback restaurants
+            const fallbackRestaurants = await Restaurant.find({ isActive: true })
+                .sort({ rating: -1 })
+                .limit(parseInt(count));
+            
+            const fallbackRecommendations = fallbackRestaurants.map(restaurant => ({
+                id: restaurant._id,
+                name: restaurant.name,
+                cuisine: restaurant.cuisine,
+                rating: restaurant.rating,
+                deliveryTime: restaurant.deliveryTime,
+                priceRange: restaurant.priceRange,
+                deliveryFee: restaurant.deliveryFee,
+                minimumOrder: restaurant.minimumOrder,
+                image: restaurant.image,
+                score: (restaurant.rating || 0) / 5,
+                matchPercentage: Math.round(((restaurant.rating || 0) / 5) * 100),
+                explanations: ['⭐ Highly rated'],
+                scores: {
+                    personal: 0,
+                    collaborative: 0,
+                    content: (restaurant.rating || 0) / 5,
+                    temporal: 0,
+                    popularity: (restaurant.rating || 0) / 5
+                }
+            }));
+            
+            return res.json({
+                success: true,
+                count: fallbackRecommendations.length,
+                recommendations: fallbackRecommendations,
+                fallback: true,
+                generatedAt: new Date().toISOString(),
+                algorithm: 'fallback_rating_based',
+                userId: userId,
+                userInfo: userInfo ? {
+                    name: userInfo.name,
+                    preferences: userInfo.preferences,
+                    isRegistered: true
+                } : {
+                    isRegistered: false,
+                    note: 'Guest user or invalid user ID'
+                },
+                debug: {
+                    serviceWorking: true,
+                    requestTime: new Date().toISOString(),
+                    totalRestaurants: await Restaurant.countDocuments({ isActive: true }),
+                    userOrders: userInfo ? await Order.countDocuments({ user: userId }) : 0
+                }
+            });
+        }
+        
+        // FORMAT RECOMMENDATIONS for frontend
+        const formattedRecommendations = recommendations.map((rec, index) => {
+            // ULTRA SAFE: Handle missing or malformed data
+            if (!rec || !rec.restaurant) {
+                console.warn(`⚠️ Skipping invalid recommendation at index ${index}:`, rec);
+                return null;
+            }
+            
+            const restaurant = rec.restaurant;
+            
+            return {
+                id: restaurant._id,
+                name: restaurant.name || 'Unknown Restaurant',
+                cuisine: restaurant.cuisine || ['Various'],
+                rating: restaurant.rating || 'New',
+                deliveryTime: restaurant.deliveryTime || '30-45 min',
+                priceRange: restaurant.priceRange || 'Moderate',
+                deliveryFee: restaurant.deliveryFee || 50,
+                minimumOrder: restaurant.minimumOrder || 200,
+                image: restaurant.image || '',
+                
+                // Recommendation metadata
+                score: Math.round((rec.finalScore || 0) * 100) / 100,
+                matchPercentage: Math.round((rec.finalScore || 0) * 100),
+                explanations: rec.explanations || ['Recommended for you'],
+                
+                // Detailed scores for debugging
+                scores: {
+                    personal: Math.round((rec.personalPreference || 0) * 100) / 100,
+                    collaborative: Math.round((rec.collaborative || 0) * 100) / 100,
+                    content: Math.round((rec.contentBased || 0) * 100) / 100,
+                    temporal: Math.round((rec.temporal || 0) * 100) / 100,
+                    popularity: Math.round((rec.popularity || 0) * 100) / 100
+                },
+                
+                // Debug info
+                debug: rec.debug || {}
+            };
+        }).filter(Boolean); // Remove null entries
+        
+        console.log('✅ Formatted recommendations:', formattedRecommendations.length);
         
         res.json({
             success: true,
-            count: recommendations.length,
-            recommendations,
+            count: formattedRecommendations.length,
+            recommendations: formattedRecommendations,
             generatedAt: new Date().toISOString(),
             algorithm: 'advanced_multi_factor',
             userId: userId,
+            userInfo: userInfo ? {
+                name: userInfo.name,
+                preferences: userInfo.preferences,
+                isRegistered: true
+            } : {
+                isRegistered: false,
+                note: 'Guest user or invalid user ID'
+            },
             debug: {
                 serviceWorking: true,
-                requestTime: new Date().toISOString()
+                requestTime: new Date().toISOString(),
+                totalRestaurants: await Restaurant.countDocuments({ isActive: true }),
+                userOrders: userInfo ? await Order.countDocuments({ user: userId }) : 0,
+                rawRecommendationsCount: recommendations.length,
+                processedRecommendationsCount: formattedRecommendations.length
             }
         });
         
@@ -126,19 +236,61 @@ app.get('/api/recommendations/advanced/:userId', async (req, res) => {
         console.error('❌ Enhanced recommendations route error:', error);
         console.error('❌ Error stack:', error.stack);
         
-        res.status(500).json({
-            success: false,
-            message: 'Error generating enhanced recommendations',
-            error: error.message,
-            timestamp: new Date().toISOString(),
-            debug: {
-                serviceAvailable: !!advancedRecommendation,
-                errorType: error.constructor.name
-            }
-        });
+        // Fallback to basic recommendations
+        try {
+            console.log('🔄 Attempting fallback to basic recommendations...');
+            const basicRestaurants = await Restaurant.find({ isActive: true })
+                .sort({ rating: -1 })
+                .limit(parseInt(count));
+            
+            const fallbackRecommendations = basicRestaurants.map(restaurant => ({
+                id: restaurant._id,
+                name: restaurant.name,
+                cuisine: restaurant.cuisine,
+                rating: restaurant.rating,
+                deliveryTime: restaurant.deliveryTime,
+                priceRange: restaurant.priceRange,
+                deliveryFee: restaurant.deliveryFee,
+                minimumOrder: restaurant.minimumOrder,
+                image: restaurant.image,
+                score: (restaurant.rating || 0) / 5,
+                matchPercentage: Math.round(((restaurant.rating || 0) / 5) * 100),
+                explanations: ['⭐ Highly rated'],
+                scores: {
+                    personal: 0,
+                    collaborative: 0,
+                    content: (restaurant.rating || 0) / 5,
+                    temporal: 0,
+                    popularity: (restaurant.rating || 0) / 5
+                }
+            }));
+            
+            res.json({
+                success: true,
+                count: fallbackRecommendations.length,
+                recommendations: fallbackRecommendations,
+                fallback: true,
+                error: 'Using fallback recommendations due to: ' + error.message,
+                timestamp: new Date().toISOString()
+            });
+            
+        } catch (fallbackError) {
+            console.error('❌ Fallback also failed:', fallbackError);
+            
+                            res.status(500).json({
+                success: false,
+                message: 'Error generating recommendations',
+                error: error.message,
+                fallbackError: fallbackError.message,
+                timestamp: new Date().toISOString(),
+                debug: {
+                    serviceAvailable: !!advancedRecommendation,
+                    errorType: error.constructor.name
+                }
+            });
+        }
     }
 });
-
 // Get recommendation explanations
 app.get('/api/recommendations/explain/:userId/:restaurantId', async (req, res) => {
     try {
@@ -275,7 +427,98 @@ app.get('/api/analytics/recommendations', async (req, res) => {
         });
     }
 });
-
+const handleQuickReply = async (reply) => {
+  console.log('🎯 Quick reply clicked:', reply);
+  
+  // Special handling for "Show recommendations"
+  if (reply === "Show recommendations") {
+    if (!currentUser || currentUser.isAdmin) {
+      // For guests or admins, show regular response
+      const userMsg = {
+        role: 'user',
+        content: reply,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      const botResponse = {
+        role: 'bot',
+        content: "I'd love to show you personalized recommendations! Please login first to get recommendations based on your preferences. 🍕",
+        timestamp: new Date().toLocaleTimeString(),
+        suggestions: ['Login', 'Browse all restaurants', 'Popular restaurants']
+      };
+      
+      setMessages(prev => [...prev, userMsg, botResponse]);
+      return;
+    }
+    
+    // For logged-in users, fetch enhanced recommendations
+    try {
+      console.log('📡 Fetching recommendations for user:', currentUser.id);
+      
+      const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${currentUser.id}?count=5&includeNew=true`);
+      const data = await response.json();
+      
+      console.log('📦 Recommendations API response:', data);
+      
+      const userMsg = {
+        role: 'user',
+        content: reply,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      if (data.success && data.recommendations && data.recommendations.length > 0) {
+        const botResponse = {
+          role: 'bot',
+          content: `🎯 Here are my personalized recommendations for you, ${currentUser.name}!\n\nI found ${data.recommendations.length} restaurants that match your taste perfectly:`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'enhanced_recommendations',
+          recommendations: data.recommendations
+        };
+        
+        setMessages(prev => [...prev, userMsg, botResponse]);
+        console.log('✅ Enhanced recommendations displayed');
+      } else {
+        // Fallback if no recommendations
+        const botResponse = {
+          role: 'bot',
+          content: `I'm still learning your preferences, ${currentUser.name}! Here are some popular restaurants to get you started:`,
+          timestamp: new Date().toLocaleTimeString(),
+          recommendations: restaurants.slice(0, 5), // Use regular restaurants
+          suggestions: ['Order food', 'Browse restaurants', 'My favorites']
+        };
+        
+        setMessages(prev => [...prev, userMsg, botResponse]);
+        console.log('⚠️ Used fallback recommendations');
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch recommendations:', error);
+      
+      // Error fallback
+      const userMsg = {
+        role: 'user',
+        content: reply,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      const botResponse = {
+        role: 'bot',
+        content: "I'm having trouble getting your personalized recommendations right now. Here are some popular options! 🍕",
+        timestamp: new Date().toLocaleTimeString(),
+        recommendations: restaurants.slice(0, 5),
+        suggestions: ['Try again', 'Browse all restaurants', 'Order food']
+      };
+      
+      setMessages(prev => [...prev, userMsg, botResponse]);
+    }
+    
+    return;
+  }
+  
+  // For other quick replies, use the existing logic
+  setInputMessage(reply);
+  sendMessage();
+};
 // Dynamic Pricing Middleware
 const applyDynamicPricing = async (req, res, next) => {
     try {

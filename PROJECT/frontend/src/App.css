@@ -4290,7 +4290,8 @@ body {
   background: #f8f9fa;
   border-radius: 20px;
   width: 95%;
-  max-width: 1400px;
+  padding: 1rem;
+  /* max-width: 1400px; */
   max-height: 90vh;
   overflow-y: auto;
   position: relative;
