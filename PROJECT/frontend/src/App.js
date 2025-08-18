@@ -1255,13 +1255,14 @@ const handleOptionSelect = (option, questionKey) => {
                         <button 
                             className="refresh-recommendations"
                             onClick={() => {
-                                console.log('🔄 Refreshing recommendations...');
-                                fetchEnhancedRecommendations(currentUser.id);
-                            }}
-                            disabled={loadingEnhancedRecs}
-                        >
-                            {loadingEnhancedRecs ? '🔄 Updating...' : '🔄 Refresh Recommendations'}
-                        </button>
+    console.log('🔄 Refreshing recommendations...');
+    // This will update enhancedRecommendations state which both systems will use
+    fetchEnhancedRecommendations(currentUser.id);
+  }}
+  disabled={loadingEnhancedRecs}
+>
+  {loadingEnhancedRecs ? '🔄 Updating...' : '🔄 Refresh Recommendations'}
+</button>
                         <button 
                             className="see-all-restaurants"
                             onClick={() => {
@@ -1934,94 +1935,95 @@ const handleLocalChatCommand = async (input) => {
   const lowerInput = input.toLowerCase();
   const userId = currentUser?.id || 'guest';
   
-  // RECOMMENDATIONS - FIND THIS SECTION
+  // RECOMMENDATIONS - UNIFIED WITH MAIN APP
   if (lowerInput.includes('recommend') || lowerInput.includes('suggestion')) {
-    console.log(' Generating recommendations...');
+  console.log('🎯 Generating recommendations...');
+  
+  if (!currentUser || currentUser.isAdmin) {
+    return {
+      role: 'bot',
+      content: "Please login to get personalized recommendations! 🔐",
+      timestamp: new Date().toLocaleTimeString(),
+      suggestions: ['Login', 'Browse restaurants', 'Popular items']
+    };
+  }
+   if (enhancedRecommendations && enhancedRecommendations.length > 0) {
+    console.log('✅ Using already loaded enhanced recommendations in chat');
+    return {
+      role: 'bot',
+      content: `🎯 Based on your taste profile, here are my top recommendations for you:`,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'enhanced_recommendations',
+      recommendations: enhancedRecommendations.slice(0, 5).map(rec => ({
+        id: rec.id,
+        name: rec.name,
+        cuisine: rec.cuisine,
+        rating: rec.rating,
+        deliveryTime: rec.deliveryTime,
+        priceRange: rec.priceRange,
+        matchPercentage: rec.matchPercentage,
+        explanations: rec.explanations,
+        deliveryFee: rec.deliveryFee || 50,
+        minimumOrder: rec.minimumOrder || 200
+      })),
+      suggestions: ['Order from these', 'Show more', 'Different cuisine', 'My favorites']
+    };
+  }
     
-    if (!currentUser || currentUser.isAdmin) {
+    // *** ALWAYS USE THE SAME API AS MAIN APP ***
+    try {
+    console.log('📡 Fetching fresh recommendations for chat...');
+    
+    const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${userId}?count=5&includeNew=true`);
+    const data = await response.json();
+    
+    console.log('📦 Chat recommendations API response:', data);
+    
+    if (data.success && data.recommendations && data.recommendations.length > 0) {
+      // *** UPDATE THE MAIN STATE SO BOTH SYSTEMS ARE SYNCHRONIZED ***
+      setEnhancedRecommendations(data.recommendations);
+      
       return {
         role: 'bot',
-        content: "Please login to get personalized recommendations! 🔐",
+        content: `🎯 Based on your taste profile, here are my top recommendations for you:`,
         timestamp: new Date().toLocaleTimeString(),
-        suggestions: ['Login', 'Browse restaurants', 'Popular items']
+        type: 'enhanced_recommendations',
+        recommendations: data.recommendations.map(rec => ({
+          id: rec.id,
+          name: rec.name,
+          cuisine: rec.cuisine,
+          rating: rec.rating,
+          deliveryTime: rec.deliveryTime,
+          priceRange: rec.priceRange,
+          matchPercentage: rec.matchPercentage,
+          explanations: rec.explanations,
+          deliveryFee: rec.deliveryFee || 50,
+          minimumOrder: rec.minimumOrder || 200
+        })),
+        suggestions: ['Order from these', 'Show more', 'Different cuisine', 'My favorites']
+      };
+    } else {
+      return {
+        role: 'bot',
+        content: "I'm still learning your preferences! Here are some popular restaurants to get started:",
+        timestamp: new Date().toLocaleTimeString(),
+        restaurants: getPopularRestaurants().slice(0, 4),
+        suggestions: ['Set my preferences', 'Show all restaurants', 'Popular items']
       };
     }
+  } catch (error) {
+    console.error('❌ Failed to fetch chat recommendations:', error);
     
-    // *** REPLACE THIS ENTIRE SECTION WITH: ***
-    try {
-      console.log('📡 Fetching enhanced recommendations for chat...');
-      
-      const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${userId}?count=5&includeNew=true`);
-      const data = await response.json();
-      
-      console.log('📦 Chat recommendations API response:', data);
-      
-      if (data.success && data.recommendations && data.recommendations.length > 0) {
-        return {
-          role: 'bot',
-          content: ` Based on your taste profile, here are my top recommendations for you:`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'enhanced_recommendations',
-          recommendations: data.recommendations.map(rec => ({
-            id: rec.id,
-            name: rec.name,
-            cuisine: rec.cuisine,
-            rating: rec.rating,
-            deliveryTime: rec.deliveryTime,
-            priceRange: rec.priceRange,
-            matchPercentage: rec.matchPercentage, // This will now be 30-80%
-            explanations: rec.explanations,
-            deliveryFee: rec.deliveryFee || 50,
-            minimumOrder: rec.minimumOrder || 200
-          })),
-          suggestions: ['Order from these', 'Show more', 'Different cuisine', 'My favorites']
-        };
-      } else {
-        return {
-          role: 'bot',
-          content: "I'm still learning your preferences! Here are some popular restaurants to get started:",
-          timestamp: new Date().toLocaleTimeString(),
-          restaurants: getPopularRestaurants().slice(0, 4),
-          suggestions: ['Set my preferences', 'Show all restaurants', 'Popular items']
-        };
-      }
-    } catch (error) {
-      console.error('❌ Failed to fetch chat recommendations:', error);
-      
-      // Fallback to local recommendations with realistic scoring
-      const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants);
-      
-      if (recommendations.length > 0) {
-        return {
-          role: 'bot',
-          content: ` Based on your preferences, here are some great options:`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'enhanced_recommendations',
-          recommendations: recommendations.map(rec => ({
-            id: rec._id,
-            name: rec.name,
-            cuisine: rec.cuisine,
-            rating: rec.rating,
-            deliveryTime: rec.deliveryTime,
-            priceRange: rec.priceRange,
-            matchPercentage: Math.round(rec.score * 100), // Convert score to percentage
-            explanations: [rec.personalizedReason || 'Perfect match for your taste'],
-            deliveryFee: rec.deliveryFee || 50,
-            minimumOrder: rec.minimumOrder || 200
-          })),
-          suggestions: ['Order from these', 'Show menu', 'Different cuisine', 'My favorites']
-        };
-      } else {
-        return {
-          role: 'bot',
-          content: "Here are some popular restaurants:",
-          timestamp: new Date().toLocaleTimeString(),
-          restaurants: getPopularRestaurants().slice(0, 4),
-          suggestions: ['Order from these', 'Set preferences', 'Browse all']
-        };
-      }
-    }
+    // Final fallback
+    return {
+      role: 'bot',
+      content: "Here are some popular restaurants:",
+      timestamp: new Date().toLocaleTimeString(),
+      restaurants: getPopularRestaurants().slice(0, 4),
+      suggestions: ['Order from these', 'Set preferences', 'Browse all']
+    };
   }
+}
   // ORDER HISTORY
   if (lowerInput.includes('my orders') || lowerInput.includes('order history')) {
     if (!currentUser) {
@@ -2233,88 +2235,110 @@ const handleEnhancedQuickReply = async (reply) => {
   
   // Special handling for "Show recommendations"
   if (reply === "Show recommendations" || reply === "get recommendations") {
-    if (!currentUser || currentUser.isAdmin) {
-      // For guests or admins, show regular response
-      const userMsg = {
-        role: 'user',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      const botResponse = {
-        role: 'bot',
-        content: "I'd love to show you personalized recommendations! Please login first to get recommendations based on your preferences. 🍕",
-        timestamp: new Date().toLocaleTimeString(),
-        suggestions: ['Login', 'Browse all restaurants', 'Popular restaurants']
-      };
-      
-      setMessages(prev => [...prev, userMsg, botResponse]);
-      return;
-    }
+  if (!currentUser || currentUser.isAdmin) {
+    // For guests or admins, show regular response
+    const userMsg = {
+      role: 'user',
+      content: reply,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    const botResponse = {
+      role: 'bot',
+      content: "I'd love to show you personalized recommendations! Please login first to get recommendations based on your preferences. 🍕",
+      timestamp: new Date().toLocaleTimeString(),
+      suggestions: ['Login', 'Browse all restaurants', 'Popular restaurants']
+    };
+    
+    setMessages(prev => [...prev, userMsg, botResponse]);
+    return;
+  }
+   if (enhancedRecommendations && enhancedRecommendations.length > 0) {
+    console.log('✅ Using existing enhanced recommendations for quick reply');
+    
+    const userMsg = {
+      role: 'user',
+      content: reply,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    const botResponse = {
+      role: 'bot',
+      content: `🎯 Here are my personalized recommendations for you, ${currentUser.name}!\n\nI found ${enhancedRecommendations.length} restaurants that match your taste:`,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'enhanced_recommendations',
+      recommendations: enhancedRecommendations
+    };
+    
+    setMessages(prev => [...prev, userMsg, botResponse]);
+    return;
+  }
     
     // For logged-in users, fetch enhanced recommendations
     try {
-      console.log('📡 Fetching recommendations for user:', currentUser.id);
-      
-      const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${currentUser.id}?count=5&includeNew=true`);
-      const data = await response.json();
-      
-      console.log('📦 Quick reply recommendations API response:', data);
-      
-      const userMsg = {
-        role: 'user',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      if (data.success && data.recommendations && data.recommendations.length > 0) {
-        const botResponse = {
-          role: 'bot',
-          content: ` Here are my personalized recommendations for you, ${currentUser.name}!\n\nI found ${data.recommendations.length} restaurants that match your taste:`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'enhanced_recommendations',
-          recommendations: data.recommendations
-        };
-        
-        setMessages(prev => [...prev, userMsg, botResponse]);
-        console.log('✅ Enhanced recommendations displayed in chat');
-      } else {
-        // Fallback if no recommendations
-        const botResponse = {
-          role: 'bot',
-          content: `I'm still learning your preferences, ${currentUser.name}! Here are some popular restaurants to get you started:`,
-          timestamp: new Date().toLocaleTimeString(),
-          restaurants: restaurants.slice(0, 5), // Use regular restaurants
-          suggestions: ['Order food', 'Browse restaurants', 'My favorites']
-        };
-        
-        setMessages(prev => [...prev, userMsg, botResponse]);
-        console.log('⚠️ Used fallback recommendations');
-      }
-      
-    } catch (error) {
-      console.error('❌ Failed to fetch recommendations:', error);
-      
-      // Error fallback
-      const userMsg = {
-        role: 'user',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString()
-      };
+    console.log('📡 Fetching recommendations for quick reply...');
+    
+    const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${currentUser.id}?count=5&includeNew=true`);
+    const data = await response.json();
+    
+    console.log('📦 Quick reply recommendations API response:', data);
+    
+    const userMsg = {
+      role: 'user',
+      content: reply,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    if (data.success && data.recommendations && data.recommendations.length > 0) {
+      // *** SYNC WITH MAIN STATE ***
+      setEnhancedRecommendations(data.recommendations);
       
       const botResponse = {
         role: 'bot',
-        content: "I'm having trouble getting your personalized recommendations right now. Here are some popular options! 🍕",
+        content: `🎯 Here are my personalized recommendations for you, ${currentUser.name}!\n\nI found ${data.recommendations.length} restaurants that match your taste:`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'enhanced_recommendations',
+        recommendations: data.recommendations
+      };
+      
+      setMessages(prev => [...prev, userMsg, botResponse]);
+      console.log('✅ Enhanced recommendations displayed in chat');
+    } else {
+      // Fallback if no recommendations
+      const botResponse = {
+        role: 'bot',
+        content: `I'm still learning your preferences, ${currentUser.name}! Here are some popular restaurants to get you started:`,
         timestamp: new Date().toLocaleTimeString(),
         restaurants: restaurants.slice(0, 5),
-        suggestions: ['Try again', 'Browse all restaurants', 'Order food']
+        suggestions: ['Order food', 'Browse restaurants', 'My favorites']
       };
       
       setMessages(prev => [...prev, userMsg, botResponse]);
     }
     
-    return;
+  } catch (error) {
+    console.error('❌ Failed to fetch recommendations:', error);
+    
+    // Error fallback
+    const userMsg = {
+      role: 'user',
+      content: reply,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    const botResponse = {
+      role: 'bot',
+      content: "I'm having trouble getting your personalized recommendations right now. Here are some popular options! 🍕",
+      timestamp: new Date().toLocaleTimeString(),
+      restaurants: restaurants.slice(0, 5),
+      suggestions: ['Try again', 'Browse all restaurants', 'Order food']
+    };
+    
+    setMessages(prev => [...prev, userMsg, botResponse]);
   }
+  
+  return;
+}
 };
 
 // Enhanced message renderer
