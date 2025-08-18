@@ -282,29 +282,6 @@
     }
   };
 
-  // ===== 5. CHATBOT RESPONSES =====
-    const chatbotResponses = {
-    greetings: [
-      "Hello! I'm your AI food assistant. How can I help you today? 🍕",
-      "Hi there! Ready to find some delicious food? 😋",
-      "Welcome! I'm here to help you discover amazing restaurants!"
-    ],
-    recommendations: [
-      "Based on your preferences, here are my top picks:",
-      "I think you'll love these restaurants:",
-      "Perfect matches for your taste:"
-    ],
-    orderHelp: [
-      "I can help you place an order! What are you craving?",
-      "Let's get you some food! What sounds good today?",
-      "Ready to order? Tell me what you're in the mood for!"
-    ],
-    fallback: [
-      "I'm not sure about that, but I can help you find great food! What are you looking for?",
-      "Let me help you with something food-related! What can I do for you?",
-      "I'm here to help with your food needs! How can I assist you?"
-    ]
-  };
 
   // ===== 6. MAIN APP COMPONENT =====
   function App() {
@@ -349,9 +326,9 @@
     });
     const [showAdminDashboard, setShowAdminDashboard] = useState(false);
     const [isNewUser, setIsNewUser] = useState(false);
-    const [analyticsData, setAnalyticsData] = useState(null);
-    const [salesTrends, setSalesTrends] = useState([]);
-    const [analyticsLoading, setAnalyticsLoading] = useState(true);
+   
+   
+    
     const [allOrders] = useState([
       {
         id: 'ORD001',
@@ -372,10 +349,6 @@
         items: ['Zinger Burger', 'Fries']
       }
     ]);
-
-    
-    const [chatLoading, setChatLoading] = useState(false);
-
     // NEW STATE VARIABLES FOR ENHANCED USER SYSTEM
     const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0);
     const [userPreferences, setUserPreferences] = useState({});
@@ -411,19 +384,25 @@
     };
 
   const fetchEnhancedRecommendations = async (userId) => {
-    console.log('🎯 Fetching enhanced recommendations for:', userId);
+    console.log(' Fetching enhanced recommendations for:', userId);
     setLoadingEnhancedRecs(true);
     
     try {
+        // DON'T override with hardcoded IDs - use the actual user ID
         let requestUserId = userId;
         
-        if (!userId || userId === 'guest' || userId.length < 20) {
+        // Only provide fallback for invalid IDs, but log it clearly
+        if (!userId || userId === 'guest') {
+            console.warn('⚠️ No valid user ID provided, using guest recommendations');
+            requestUserId = '6870bd22f7b37e4543eebd97'; // Budget user as fallback
+        } else if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+            console.warn('⚠️ Invalid ObjectId format, using fallback');
             requestUserId = '6870bd22f7b37e4543eebd97';
-            console.log('🔄 Using budget test user ObjectId:', requestUserId);
         }
         
         const url = `http://localhost:5000/api/recommendations/advanced/${requestUserId}?count=6&includeNew=true`;
-        console.log('📡 Requesting:', url);
+        console.log('📡 Requesting recommendations from:', url);
+        console.log('👤 For user ID:', requestUserId);
         
         const response = await fetch(url);
         
@@ -434,26 +413,9 @@
         }
         
         const data = await response.json();
-        console.log('📦 RAW API Response:', JSON.stringify(data, null, 2));
-        
-        // DETAILED DATA INSPECTION
-        if (data.recommendations) {
-            console.log('📊 Recommendations array length:', data.recommendations.length);
-            
-            data.recommendations.forEach((rec, index) => {
-                console.log(`🔍 Recommendation ${index}:`, {
-                    hasRec: !!rec,
-                    type: typeof rec,
-                    keys: rec ? Object.keys(rec) : 'N/A',
-                    name: rec?.name || 'MISSING NAME',
-                    id: rec?.id || 'MISSING ID',
-                    fullObject: rec
-                });
-            });
-        }
+        console.log('📦 API Response for user', requestUserId, ':', data);
         
         if (data.success && data.recommendations && data.recommendations.length > 0) {
-            // SAFE FILTERING WITH DETAILED LOGGING
             const validRecommendations = data.recommendations.filter((rec, index) => {
                 const isValid = rec && 
                                typeof rec === 'object' && 
@@ -462,42 +424,21 @@
                                rec.name.trim().length > 0;
                 
                 if (!isValid) {
-                    console.warn(`⚠️ Invalid recommendation at index ${index}:`, {
-                        exists: !!rec,
-                        type: typeof rec,
-                        hasName: !!rec?.name,
-                        nameType: typeof rec?.name,
-                        nameValue: rec?.name,
-                        fullRec: rec
-                    });
-                    return false;
+                    console.warn(`⚠️ Invalid recommendation at index ${index}:`, rec);
                 }
-                
-                console.log(`✅ Valid recommendation ${index}: ${rec.name}`);
-                return true;
+                return isValid;
             });
             
-            console.log('✅ Valid recommendations count:', validRecommendations.length);
-            
-            if (validRecommendations.length > 0) {
-                setEnhancedRecommendations(validRecommendations);
-                setShowEnhancedRecs(true);
-            } else {
-                console.log('❌ No valid recommendations after filtering - using empty state');
-                setEnhancedRecommendations([]);
-                setShowEnhancedRecs(true);
-            }
-            
+            console.log(`✅ Valid recommendations for user ${requestUserId}:`, validRecommendations.length);
+            setEnhancedRecommendations(validRecommendations);
+            setShowEnhancedRecs(true);
         } else {
-            console.log('❌ API returned no recommendations');
+            console.log(`❌ No recommendations for user ${requestUserId}`);
             setEnhancedRecommendations([]);
             setShowEnhancedRecs(true);
         }
     } catch (error) {
         console.error('❌ Enhanced recommendations error:', error);
-        console.error('❌ Error stack:', error.stack);
-        
-        // SAFE FALLBACK
         setEnhancedRecommendations([]);
         setShowEnhancedRecs(true);
     } finally {
@@ -519,92 +460,59 @@
     };
 
     // Function to fetch dynamic pricing
-    const fetchDynamicPricing = async () => {
-      if (!selectedRestaurant || cart.length === 0) return;
-      
-      console.log('💰 Fetching dynamic pricing for:', selectedRestaurant.name);
-      setPricingLoading(true);
-      
-      try {
-        const baseDeliveryFee = selectedRestaurant.deliveryFee || 50;
-        const location = {
-          type: 'Point',
-          coordinates: [67.0011, 24.8607] // Karachi coordinates
-        };
-        
-        const response = await fetch('http://localhost:5000/api/pricing/calculate-price', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            restaurantId: selectedRestaurant._id,
-            baseDeliveryFee,
-            location
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          setDynamicPricing(data.pricing);
-          console.log('✅ Dynamic pricing received:', data.pricing);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching dynamic pricing:', error);
-      } finally {
-        setPricingLoading(false);
-      }
+    const fetchDynamicPricing = useCallback(async () => {
+  if (!selectedRestaurant || cart.length === 0) return;
+  
+  console.log('💰 Fetching dynamic pricing for:', selectedRestaurant.name);
+  setPricingLoading(true);
+  
+  try {
+    const baseDeliveryFee = selectedRestaurant.deliveryFee || 50;
+    const location = {
+      type: 'Point',
+      coordinates: [67.0011, 24.8607] // Karachi coordinates
     };
+    
+    const response = await fetch('http://localhost:5000/api/pricing/calculate-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        restaurantId: selectedRestaurant._id,
+        baseDeliveryFee,
+        location
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      setDynamicPricing(data.pricing);
+      console.log('✅ Dynamic pricing received:', data.pricing);
+    }
+  } catch (error) {
+    console.error('❌ Error fetching dynamic pricing:', error);
+  } finally {
+    setPricingLoading(false);
+  }
+}, [selectedRestaurant, cart.length]);
 
     // ===== ANALYTICS FUNCTION =====
     const fetchAnalytics = useCallback(() => {
-      setAnalyticsLoading(true);
       
       setTimeout(() => {
         const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
-        const totalOrders = allOrders.length;
-        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        
+       
         const restaurantOrders = {};
         allOrders.forEach(order => {
           const restName = order.restaurant;
           restaurantOrders[restName] = (restaurantOrders[restName] || 0) + 1;
         });
         
-        const popularRestaurants = Object.entries(restaurantOrders)
-          .map(([name, count]) => ({ name, orders: count }))
-          .sort((a, b) => b.orders - a.orders)
-          .slice(0, 5);
-        
         const statusCounts = {};
         allOrders.forEach(order => {
           statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
         });
         
-        const orderStatusData = Object.entries(statusCounts)
-          .map(([status, count]) => ({ status, count }));
-        
-        const salesData = [
-          { date: '2024-01-08', sales: 1200 },
-          { date: '2024-01-09', sales: 1500 },
-          { date: '2024-01-10', sales: 1800 },
-          { date: '2024-01-11', sales: 1400 },
-          { date: '2024-01-12', sales: 1600 },
-          { date: '2024-01-13', sales: 2000 },
-          { date: '2024-01-14', sales: totalRevenue }
-        ];
-        
-        setAnalyticsData({
-          totalRevenue,
-          totalOrders,
-          avgOrderValue,
-          popularRestaurants,
-          orderStatusData,
-          activeCustomers: 89,
-          growthRate: 15.3
-        });
-        
-        setSalesTrends(salesData);
-        setAnalyticsLoading(false);
       }, 1000);
     }, [allOrders]);
 
@@ -629,19 +537,21 @@
     console.log('👤 User changed, checking for enhanced recommendations...', {
         user: currentUser?.name,
         isAdmin: currentUser?.isAdmin,
-        userId: currentUser?.id
+        userId: currentUser?.id,
+        userIdLength: currentUser?.id?.length
     });
     
-    // Always fetch recommendations for any logged-in non-admin user
-    if (currentUser && !currentUser.isAdmin) {
-        console.log('📡 Fetching enhanced recommendations for user:', currentUser.id);
-        fetchEnhancedRecommendations(currentUser.id);
+    // Always fetch recommendations for any logged-in non-admin user using THEIR actual ID
+    if (currentUser && !currentUser.isAdmin && currentUser.id) {
+        console.log('📡 Fetching recommendations for actual user:', currentUser.id);
+        fetchEnhancedRecommendations(currentUser.id); // Use the REAL user ID!
     } else {
         console.log('❌ Not fetching recommendations - no user or admin user');
         setEnhancedRecommendations([]);
         setShowEnhancedRecs(false);
     }
 }, [currentUser]);
+
 
         useEffect(() => {
   // Save chat state to session storage
@@ -676,7 +586,7 @@
     
     return () => clearInterval(interval);
   }
-   }, [selectedRestaurant, cart.length]);
+   }, [selectedRestaurant, cart.length,fetchDynamicPricing]);
 
   useEffect(() => {
       console.log('👤 User changed, checking for enhanced recommendations...', {
@@ -776,6 +686,7 @@
   const handleLogin = async (e) => {
     e.preventDefault();
     
+    // Admin login
     if (authForm.email === 'admin@food.pk' && authForm.password === 'admin123') {
         const adminUser = {
             id: 'admin_user',
@@ -789,64 +700,84 @@
         setShowAuth(false);
         setShowAdminDashboard(true);
         alert('Welcome Admin!');
-        
         setAuthForm({ name: '', email: '', password: '', phone: '' });
         return;
     }
     
-    // Handle budget test user
-    if (authForm.email === 'budget@test.com') {
-        const budgetUser = {
-            id: '6870bd22f7b37e4543eebd97', // Your actual budget user ObjectId
+    // Test Users with Different Preferences
+    const testUsers = {
+        'budget@test.com': {
+            id: '6870bd22f7b37e4543eebd97',
             name: 'Ahmed Budget',
-            email: authForm.email,
-            phone: '0321-1111111',
-            isAdmin: false
-        };
-        
-        setCurrentUser(budgetUser);
-        localStorage.setItem('currentUser', JSON.stringify(budgetUser));
-        setShowAuth(false);
-        alert(`Welcome back, ${budgetUser.name}!`);
-        
-        setAuthForm({ name: '', email: '', password: '', phone: '' });
-        return;
-    }
-    
-    // Handle KFC test user
-    if (authForm.email === 'kfc@test.com') {
-        const kfcUser = {
-            id: '6870bd84e75152da7d6afb6a', // Your KFC test user ObjectId
+            description: 'Pakistani food lover, budget-conscious'
+        },
+        'kfc@test.com': {
+            id: '6870bd84e75152da7d6afb6a', 
             name: 'Sara KFC Lover',
-            email: authForm.email,
-            phone: '0333-9876543',
-            isAdmin: false
-        };
-        
-        setCurrentUser(kfcUser);
-        localStorage.setItem('currentUser', JSON.stringify(kfcUser));
-        setShowAuth(false);
-        alert(`Welcome back, ${kfcUser.name}!`);
-        
-        setAuthForm({ name: '', email: '', password: '', phone: '' });
-        return;
-    }
+            description: 'Fast food enthusiast'
+        },
+        'pizza@test.com': {
+            id: '6870be12f7b37e4543eebd99',
+            name: 'Ali Pizza Fan', 
+            description: 'Italian food lover, premium budget'
+        },
+        'chinese@test.com': {
+            id: '6870be45f7b37e4543eebd9a',
+            name: 'Li Wei',
+            description: 'Chinese & Asian cuisine lover'
+        },
+        'healthy@test.com': {
+            id: '6870be78f7b37e4543eebd9b',
+            name: 'Ayesha Fitness',
+            description: 'Health-conscious, vegetarian options'
+        },
+        'bbq@test.com': {
+            id: '6870beabf7b37e4543eebd9c',
+            name: 'Hassan BBQ King',
+            description: 'BBQ & traditional Pakistani food lover'
+        },
+        'premium@test.com': {
+            id: '6870beded7b37e4543eebd9d',
+            name: 'Fatima Elite',
+            description: 'Premium dining, continental cuisine'
+        }
+    };
     
-    // Default login for other users
-    if (authForm.email && authForm.password) {
+    // Check if it's a test user
+    if (testUsers[authForm.email]) {
+        const testUser = testUsers[authForm.email];
         const user = {
-            id: '6870bd22f7b37e4543eebd97', // Default to budget user for testing
-            name: authForm.name || 'Test User',
+            id: testUser.id,
+            name: testUser.name,
             email: authForm.email,
-            phone: authForm.phone,
-            isAdmin: false
+            phone: '0321-1234567',
+            isAdmin: false,
+            description: testUser.description
         };
         
         setCurrentUser(user);
         localStorage.setItem('currentUser', JSON.stringify(user));
         setShowAuth(false);
-        alert(`Welcome back, ${user.name}!`);
+        alert(`Welcome back, ${user.name}!\n${user.description}`);
+        setAuthForm({ name: '', email: '', password: '', phone: '' });
+        return;
+    }
+    
+    // For any other email, create a guest user with fallback recommendations
+    if (authForm.email && authForm.password) {
+        const user = {
+            id: 'guest_user', // This will trigger fallback recommendations
+            name: authForm.name || 'Guest User',
+            email: authForm.email,
+            phone: authForm.phone,
+            isAdmin: false,
+            isGuest: true
+        };
         
+        setCurrentUser(user);
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        setShowAuth(false);
+        alert(`Welcome, ${user.name}! You're using guest mode with general recommendations.`);
         setAuthForm({ name: '', email: '', password: '', phone: '' });
     }
 };
@@ -1043,7 +974,7 @@ const handleOptionSelect = (option, questionKey) => {
 };
 
   const EnhancedRecommendationsSection = () => {
-    console.log('🎯 EnhancedRecommendationsSection rendering...', {
+    console.log(' EnhancedRecommendationsSection rendering...', {
         currentUser: currentUser?.name,
         recommendationsCount: enhancedRecommendations?.length || 0,
         loadingEnhancedRecs,
@@ -1074,7 +1005,7 @@ const handleOptionSelect = (option, questionKey) => {
         if (!explanation || typeof explanation !== 'string') return '💡 Recommended';
         
         const iconMap = {
-            'Based on your preferences': '🎯',
+            'Based on your preferences': '',
             'Popular choice': '🔥', 
             'Highly rated': '⭐',
             'Recommended for you': '💫',
@@ -1107,7 +1038,7 @@ const handleOptionSelect = (option, questionKey) => {
                 // Enhanced Loading state
                 <>
                     <div className="enhanced-rec-header">
-                        <h2>🎯 Crafting Your Perfect Menu</h2>
+                        <h2> Crafting Your Perfect Menu</h2>
                         <p>Our AI is analyzing your taste profile...</p>
                         <div className="loading-stages">
                             <div className="stage active">📊 Analyzing preferences</div>
@@ -1127,7 +1058,7 @@ const handleOptionSelect = (option, questionKey) => {
                 // Enhanced Empty state
                 <>
                     <div className="enhanced-rec-header">
-                        <h2>🎯 Your Personalized Dashboard</h2>
+                        <h2> Your Personalized Dashboard</h2>
                         <p>Discover restaurants tailored just for you</p>
                     </div>
                     <div className="no-recommendations-state">
@@ -1145,7 +1076,7 @@ const handleOptionSelect = (option, questionKey) => {
                                     fetchEnhancedRecommendations(currentUser.id);
                                 }}
                             >
-                                🎯 Get My Recommendations
+                                 Get My Recommendations
                             </button>
                             <button 
                                 className="setup-preferences secondary"
@@ -1163,7 +1094,7 @@ const handleOptionSelect = (option, questionKey) => {
                 // Enhanced recommendations display
                 <>
                     <div className="enhanced-rec-header">
-                        <h2>🎯 Personalized Just For You</h2>
+                        <h2> Personalized Just For You</h2>
                         <p>Based on your preferences and ordering history</p>
                         <div className="recommendation-stats">
                             <div className="stat">
@@ -1350,7 +1281,7 @@ const handleOptionSelect = (option, questionKey) => {
                         <h4>💡 Why These Recommendations?</h4>
                         <div className="insights-grid">
                             <div className="insight">
-                                <span className="insight-icon">🎯</span>
+                                <span className="insight-icon"></span>
                                 <span>Matched to your taste preferences</span>
                             </div>
                             <div className="insight">
@@ -1372,7 +1303,7 @@ const handleOptionSelect = (option, questionKey) => {
 
 // Add this to replace your current SimpleEnhancedRecommendations
 const FixedEnhancedRecommendations = () => {
-    console.log('🎯 FixedEnhancedRecommendations rendering...', {
+    console.log(' FixedEnhancedRecommendations rendering...', {
         currentUser: currentUser?.name,
         recommendationsCount: enhancedRecommendations?.length || 0,
         loadingEnhancedRecs,
@@ -1398,7 +1329,7 @@ const FixedEnhancedRecommendations = () => {
         if (!explanation || typeof explanation !== 'string') return '💡 Recommended';
         
         const iconMap = {
-            'based on your preferences': '🎯',
+            'based on your preferences': '',
             'popular choice': '🔥', 
             'highly rated': '⭐',
             'recommended for you': '💫',
@@ -1430,7 +1361,7 @@ const FixedEnhancedRecommendations = () => {
                 color: 'white',
                 textAlign: 'center'
             }}>
-                <h2>🎯 Finding Your Perfect Restaurants</h2>
+                <h2> Finding Your Perfect Restaurants</h2>
                 <p>Our AI is analyzing your preferences...</p>
                 <div style={{
                     display: 'inline-block',
@@ -1458,7 +1389,7 @@ const FixedEnhancedRecommendations = () => {
                 color: 'white',
                 textAlign: 'center'
             }}>
-                <h2>🎯 Your Personalized Dashboard</h2>
+                <h2> Your Personalized Dashboard</h2>
                 <p>We're building your taste profile...</p>
                 <div style={{ fontSize: '3rem', margin: '20px 0' }}>🍽️</div>
                 <h3>Getting To Know Your Taste</h3>
@@ -1479,7 +1410,7 @@ const FixedEnhancedRecommendations = () => {
                             fetchEnhancedRecommendations(currentUser.id);
                         }}
                     >
-                        🎯 Get Recommendations
+                         Get Recommendations
                     </button>
                     <button 
                         style={{
@@ -1516,7 +1447,7 @@ const FixedEnhancedRecommendations = () => {
         }}>
             {/* Header */}
             <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                <h2 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>🎯 Perfect Matches For You</h2>
+                <h2 style={{ fontSize: '1.8rem', marginBottom: '8px' }}> Perfect Matches For You</h2>
                 <p style={{ opacity: '0.9', marginBottom: '20px' }}>Based on your preferences and ordering history</p>
                 
                 <div style={{ 
@@ -1697,7 +1628,7 @@ const FixedEnhancedRecommendations = () => {
                                     marginBottom: '8px',
                                     fontSize: '1.1rem'
                                 }}>
-                                    🎯 {matchScore}% Match
+                                     {matchScore}% Match
                                 </div>
                                 <div style={{
                                     height: '6px',
@@ -1859,7 +1790,7 @@ const FixedEnhancedRecommendations = () => {
                     gap: '15px'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.5rem' }}>🎯</span>
+                        <span style={{ fontSize: '1.5rem' }}></span>
                         <span>Matched to your taste preferences</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1876,264 +1807,6 @@ const FixedEnhancedRecommendations = () => {
     );
 };
 
-
-    // Enhanced Order-Capable Chatbot Response Generator
-const generateEnhancedChatbotResponse = (userInput, userId) => {
-  const userData = getUserData(userId);
-  const lowerInput = userInput.toLowerCase();
-  
-  let response = {
-    role: 'bot',
-    timestamp: new Date().toLocaleTimeString(),
-    orderAction: null
-  };
-
-  // ORDER INITIATION PATTERNS
-  if (lowerInput.includes('order') || lowerInput.includes('want to eat') || 
-      lowerInput.includes('hungry') || lowerInput.includes('craving')) {
-    
-    // Extract cuisine/food type from input
-    const foodKeywords = extractFoodFromInput(lowerInput);
-    
-    if (foodKeywords.length > 0) {
-      const matchingRestaurants = restaurants.filter(r => 
-        r.cuisine && r.cuisine.some(c => 
-          foodKeywords.some(food => c.toLowerCase().includes(food.toLowerCase()))
-        )
-      ).slice(0, 4);
-      
-      if (matchingRestaurants.length > 0) {
-        response.content = `🍽️ Great! I found ${matchingRestaurants.length} restaurants for ${foodKeywords.join(' & ')}. Which one would you like to order from?`;
-        response.recommendations = matchingRestaurants;
-        response.orderAction = {
-          type: 'RESTAURANT_SELECTION',
-          restaurants: matchingRestaurants,
-          searchedFor: foodKeywords
-        };
-        response.quickReplies = ["Show menu", "Different cuisine", "Cancel order"];
-      } else {
-        response.content = "I couldn't find restaurants for that cuisine. Here are some popular options:";
-        response.recommendations = getPopularRestaurants().slice(0, 3);
-        response.quickReplies = ["Show all restaurants", "My favorites", "Recommend something"];
-      }
-    } else {
-      // General order request - show popular or recommended
-      const recommendations = userData.preferences && Object.keys(userData.preferences).length > 0 
-        ? enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants).slice(0, 4)
-        : getPopularRestaurants().slice(0, 4);
-      
-      response.content = "🍕 Perfect! I can help you place an order. Here are some great options:";
-      response.recommendations = recommendations;
-      response.orderAction = {
-        type: 'RESTAURANT_SELECTION',
-        restaurants: recommendations
-      };
-      response.quickReplies = ["Show menu", "Browse all restaurants", "My favorites"];
-    }
-  }
-  
-  // RESTAURANT SELECTION (when user clicks a restaurant card)
-  else if (lowerInput.startsWith('restaurant_selected:')) {
-    const restaurantId = lowerInput.split(':')[1];
-    const restaurant = restaurants.find(r => r._id === restaurantId);
-    
-    if (restaurant) {
-      response.content = `🏪 Great choice! ${restaurant.name} is known for excellent ${restaurant.cuisine?.join(' & ')}. Let me show you their menu:`;
-      response.orderAction = {
-        type: 'SHOW_MENU',
-        restaurant: restaurant,
-        restaurantId: restaurantId
-      };
-      response.quickReplies = ["Show popular items", "Add to cart", "Different restaurant"];
-    }
-  }
-  
-  // MENU ITEM SELECTION
-  else if (lowerInput.startsWith('add_item:')) {
-    const itemId = lowerInput.split(':')[1];
-    response.orderAction = {
-      type: 'ADD_TO_CART',
-      itemId: itemId
-    };
-    response.content = "✅ Added to cart! Want to add more items or proceed to checkout?";
-    response.quickReplies = ["Add more items", "View cart", "Checkout now", "Remove item"];
-  }
-  
-  // CART MANAGEMENT
-  else if (lowerInput.includes('cart') || lowerInput.includes('my order')) {
-    if (cart.length > 0) {
-      const total = calculateTotal();
-      response.content = `🛒 Your current order:\n\n${cart.map(item => 
-        `• ${item.name} x${item.quantity} - Rs. ${item.price * item.quantity}`
-      ).join('\n')}\n\n💰 Total: Rs. ${total.total} (including Rs. ${total.deliveryFee} delivery)`;
-      
-      response.orderAction = {
-        type: 'SHOW_CART',
-        items: cart,
-        total: total
-      };
-      response.quickReplies = ["Checkout now", "Add more items", "Remove items", "Clear cart"];
-    } else {
-      response.content = "🛒 Your cart is empty. Would you like to browse restaurants?";
-      response.quickReplies = ["Browse restaurants", "Show recommendations", "Popular items"];
-    }
-  }
-  
-  // CHECKOUT INITIATION
-  else if (lowerInput.includes('checkout') || lowerInput.includes('place order') || 
-           lowerInput.includes('confirm order')) {
-    
-    if (!currentUser) {
-      response.content = "🔐 Please login first to place an order. I'll save your cart for you!";
-      response.quickReplies = ["Login now", "Create account", "Continue browsing"];
-      return response;
-    }
-    
-    if (cart.length === 0) {
-      response.content = "🛒 Your cart is empty! Let me help you find something delicious.";
-      response.recommendations = getPopularRestaurants().slice(0, 3);
-      response.quickReplies = ["Browse restaurants", "Show recommendations"];
-      return response;
-    }
-    
-    // Check for saved address
-    const savedAddress = getSavedUserAddress(currentUser.id);
-    
-    if (savedAddress) {
-      const total = calculateTotal();
-      response.content = `📋 Order Summary:\n\n${cart.map(item => 
-        `• ${item.name} x${item.quantity} - Rs. ${item.price * item.quantity}`
-      ).join('\n')}\n\n📍 Delivery to: ${savedAddress.street}, ${savedAddress.area}\n💰 Total: Rs. ${total.total}\n\n🤖 Shall I place this order for you?`;
-      
-      response.orderAction = {
-        type: 'CONFIRM_ORDER',
-        items: cart,
-        address: savedAddress,
-        total: total
-      };
-      response.quickReplies = ["Yes, place order!", "Change address", "Modify order", "Cancel"];
-    } else {
-      response.content = "📍 I need your delivery address to place the order. Please provide:";
-      response.orderAction = {
-        type: 'COLLECT_ADDRESS'
-      };
-      response.quickReplies = ["Enter address manually", "Use current location", "Cancel order"];
-    }
-  }
-  
-  // ADDRESS COLLECTION
-  else if (lowerInput.includes('address:') || lowerInput.includes('deliver to:')) {
-    const addressText = lowerInput.split(/address:|deliver to:/)[1]?.trim();
-    if (addressText) {
-      const parsedAddress = parseAddressFromText(addressText);
-      
-      response.content = `📍 Address saved: ${parsedAddress.street}, ${parsedAddress.area}\n\n✅ Ready to place your order! Total: Rs. ${calculateTotal().total}`;
-      response.orderAction = {
-        type: 'ADDRESS_CONFIRMED',
-        address: parsedAddress
-      };
-      response.quickReplies = ["Place order now!", "Change address", "View order"];
-    }
-  }
-  
-  // ORDER CONFIRMATION
-  else if (lowerInput.includes('yes, place order') || lowerInput.includes('confirm')) {
-    response.orderAction = {
-      type: 'PLACE_ORDER_NOW'
-    };
-    response.content = "🚀 Placing your order now... This will take a moment!";
-  }
-  
-  // EXISTING RESPONSES (keep your current ones)
-  else if (lowerInput.includes('popular')) {
-    const popularRestaurants = getPopularRestaurants();
-    response.content = "🔥 Here are our most popular restaurants:";
-    response.recommendations = popularRestaurants;
-    response.quickReplies = ["Order from these", "Show menus", "My preferences"];
-  }
-  
-  else if (lowerInput.includes('my orders') || lowerInput.includes('order history')) {
-    if (userData.orderHistory.length > 0) {
-      const recentOrders = userData.orderHistory.slice(0, 5);
-      response.content = `📋 Your recent orders:`;
-      response.orderHistory = recentOrders;
-      response.quickReplies = ["Reorder favorite", "Rate orders", "Track current order"];
-    } else {
-      response.content = "📋 No previous orders found. Let's order something delicious!";
-      response.recommendations = restaurants.slice(0, 3);
-      response.quickReplies = ["Browse restaurants", "Show recommendations"];
-    }
-  }
-  
-  else if (lowerInput.includes('favorites')) {
-    if (userData.favorites.length > 0) {
-      const favoriteRestaurants = userData.favorites
-        .map(id => restaurants.find(r => r._id === id))
-        .filter(Boolean);
-      response.content = "❤️ Your favorite restaurants:";
-      response.recommendations = favoriteRestaurants;
-      response.quickReplies = ["Order from favorites", "Browse all", "Add more favorites"];
-    } else {
-      response.content = "❤️ No favorites yet. Try some restaurants and add them to favorites!";
-      response.recommendations = getPopularRestaurants().slice(0, 3);
-      response.quickReplies = ["Browse restaurants", "Show recommendations"];
-    }
-  }
-  
-  // DEFAULT RESPONSE
-  else {
-    response.content = "🍕 I'm your food ordering assistant! I can help you:\n\n🛒 Place orders\n🔍 Find restaurants\n⭐ Show recommendations\n📋 Check order history\n\nWhat would you like to do?";
-    response.quickReplies = ["Order food now", "Show recommendations", "Popular restaurants", "My favorites"];
-  }
-
-  return response;
-};
-
-// Helper function to extract food types from user input
-const extractFoodFromInput = (input) => {
-  const foodKeywords = {
-    'biryani': 'Biryani',
-    'pizza': 'Pizza', 
-    'burger': 'Burger',
-    'chinese': 'Chinese',
-    'desi': 'Pakistani',
-    'pakistani': 'Pakistani',
-    'fast food': 'Fast Food',
-    'bbq': 'BBQ',
-    'karahi': 'Pakistani',
-    'kebab': 'BBQ',
-    'sandwich': 'Sandwich',
-    'pasta': 'Italian',
-    'italian': 'Italian'
-  };
-  
-  const found = [];
-  for (const [keyword, cuisine] of Object.entries(foodKeywords)) {
-    if (input.includes(keyword)) {
-      found.push(cuisine);
-    }
-  }
-  return [...new Set(found)]; // Remove duplicates
-};
-
-// Helper function to parse address from text
-const parseAddressFromText = (addressText) => {
-  // Simple address parsing - you can make this more sophisticated
-  const parts = addressText.split(',').map(p => p.trim());
-  
-  return {
-    street: parts[0] || addressText,
-    area: parts[1] || 'Karachi',
-    city: 'Karachi',
-    instructions: parts.length > 2 ? parts.slice(2).join(', ') : ''
-  };
-};
-
-// Helper function to get saved user address
-const getSavedUserAddress = (userId) => {
-  const saved = localStorage.getItem(`address_${userId}`);
-  return saved ? JSON.parse(saved) : null;
-};
 
     const completeOnboarding = (finalPreferences = userPreferences) => {
   if (!isOnboardingActive) {
@@ -2169,11 +1842,6 @@ const getSavedUserAddress = (userId) => {
 };
 
 
-// In your sendMessage function, add better context handling:
-// COMPLETE ENHANCED CHATBOT SYSTEM
-// Replace your entire sendMessage function and related chat functions with this
-
-// Enhanced sendMessage function that uses all the advanced features
 const sendMessage = async () => {
   if (!inputMessage.trim()) return;
 
@@ -2266,9 +1934,9 @@ const handleLocalChatCommand = async (input) => {
   const lowerInput = input.toLowerCase();
   const userId = currentUser?.id || 'guest';
   
-  // RECOMMENDATIONS
+  // RECOMMENDATIONS - FIND THIS SECTION
   if (lowerInput.includes('recommend') || lowerInput.includes('suggestion')) {
-    console.log('🎯 Generating recommendations...');
+    console.log(' Generating recommendations...');
     
     if (!currentUser || currentUser.isAdmin) {
       return {
@@ -2279,52 +1947,81 @@ const handleLocalChatCommand = async (input) => {
       };
     }
     
-    // Get enhanced recommendations
-    const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants);
-    
-    if (recommendations.length > 0) {
-      return {
-        role: 'bot',
-        content: `🎯 Based on your taste profile, here are my top recommendations for you:`,
-        timestamp: new Date().toLocaleTimeString(),
-        type: 'enhanced_recommendations',
-        recommendations: recommendations.map(rec => ({
-          id: rec._id,
-          name: rec.name,
-          cuisine: rec.cuisine,
-          rating: rec.rating,
-          deliveryTime: rec.deliveryTime,
-          priceRange: rec.priceRange,
-          matchPercentage: Math.round(rec.score * 10) || 85,
-          explanations: [rec.personalizedReason || 'Perfect match for your taste'],
-          deliveryFee: rec.deliveryFee || 50,
-          minimumOrder: rec.minimumOrder || 200
-        })),
-        suggestions: ['Order from these', 'Show more', 'Different cuisine', 'My favorites']
-      };
-    } else {
-      return {
-        role: 'bot',
-        content: "I'm still learning your preferences! Here are some popular restaurants to get started:",
-        timestamp: new Date().toLocaleTimeString(),
-        restaurants: getPopularRestaurants().slice(0, 4),
-        suggestions: ['Set my preferences', 'Show all restaurants', 'Popular items']
-      };
+    // *** REPLACE THIS ENTIRE SECTION WITH: ***
+    try {
+      console.log('📡 Fetching enhanced recommendations for chat...');
+      
+      const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${userId}?count=5&includeNew=true`);
+      const data = await response.json();
+      
+      console.log('📦 Chat recommendations API response:', data);
+      
+      if (data.success && data.recommendations && data.recommendations.length > 0) {
+        return {
+          role: 'bot',
+          content: ` Based on your taste profile, here are my top recommendations for you:`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'enhanced_recommendations',
+          recommendations: data.recommendations.map(rec => ({
+            id: rec.id,
+            name: rec.name,
+            cuisine: rec.cuisine,
+            rating: rec.rating,
+            deliveryTime: rec.deliveryTime,
+            priceRange: rec.priceRange,
+            matchPercentage: rec.matchPercentage, // This will now be 30-80%
+            explanations: rec.explanations,
+            deliveryFee: rec.deliveryFee || 50,
+            minimumOrder: rec.minimumOrder || 200
+          })),
+          suggestions: ['Order from these', 'Show more', 'Different cuisine', 'My favorites']
+        };
+      } else {
+        return {
+          role: 'bot',
+          content: "I'm still learning your preferences! Here are some popular restaurants to get started:",
+          timestamp: new Date().toLocaleTimeString(),
+          restaurants: getPopularRestaurants().slice(0, 4),
+          suggestions: ['Set my preferences', 'Show all restaurants', 'Popular items']
+        };
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch chat recommendations:', error);
+      
+      // Fallback to local recommendations with realistic scoring
+      const recommendations = enhancedRecommendationEngineArrow.getPersonalizedRecommendations(userId, restaurants);
+      
+      if (recommendations.length > 0) {
+        return {
+          role: 'bot',
+          content: ` Based on your preferences, here are some great options:`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'enhanced_recommendations',
+          recommendations: recommendations.map(rec => ({
+            id: rec._id,
+            name: rec.name,
+            cuisine: rec.cuisine,
+            rating: rec.rating,
+            deliveryTime: rec.deliveryTime,
+            priceRange: rec.priceRange,
+            matchPercentage: Math.round(rec.score * 100), // Convert score to percentage
+            explanations: [rec.personalizedReason || 'Perfect match for your taste'],
+            deliveryFee: rec.deliveryFee || 50,
+            minimumOrder: rec.minimumOrder || 200
+          })),
+          suggestions: ['Order from these', 'Show menu', 'Different cuisine', 'My favorites']
+        };
+      } else {
+        return {
+          role: 'bot',
+          content: "Here are some popular restaurants:",
+          timestamp: new Date().toLocaleTimeString(),
+          restaurants: getPopularRestaurants().slice(0, 4),
+          suggestions: ['Order from these', 'Set preferences', 'Browse all']
+        };
+      }
     }
   }
-  
-  // POPULAR RESTAURANTS
-  if (lowerInput.includes('popular') || lowerInput.includes('trending')) {
-    const popularRestaurants = getPopularRestaurants();
-    return {
-      role: 'bot',
-      content: "🔥 Here are the most popular restaurants right now:",
-      timestamp: new Date().toLocaleTimeString(),
-      restaurants: popularRestaurants,
-      suggestions: ['Order from these', 'Show recommendations', 'Different cuisine']
-    };
-  }
-  
   // ORDER HISTORY
   if (lowerInput.includes('my orders') || lowerInput.includes('order history')) {
     if (!currentUser) {
@@ -2493,7 +2190,7 @@ const generateEnhancedLocalResponse = async (input) => {
   if (lowerInput.includes('help')) {
     return {
       role: 'bot',
-      content: "🤖 I'm here to help! I can assist you with:\n\n🎯 Personalized restaurant recommendations\n🍔 Finding restaurants by cuisine\n🛒 Placing food orders\n📋 Checking your order history\n❤️ Managing your favorites\n\nWhat would you like to do?",
+      content: "🤖 I'm here to help! I can assist you with:\n\n Personalized restaurant recommendations\n🍔 Finding restaurants by cuisine\n🛒 Placing food orders\n📋 Checking your order history\n❤️ Managing your favorites\n\nWhat would you like to do?",
       timestamp: new Date().toLocaleTimeString(),
       suggestions: ['Get recommendations', 'Browse restaurants', 'Order food', 'My account']
     };
@@ -2534,77 +2231,90 @@ const handleBackendResponse = (data) => {
 const handleEnhancedQuickReply = async (reply) => {
   console.log('🚀 Quick reply clicked:', reply);
   
-  setInputMessage('');
-  
-  // Add user message
-  const userMsg = {
-    role: 'user',
-    content: reply,
-    timestamp: new Date().toLocaleTimeString()
-  };
-  setMessages(prev => [...prev, userMsg]);
-  
-  // Generate enhanced response based on the reply
-  setIsTyping(true);
-  
-  setTimeout(async () => {
-    let response;
-    
-    switch (reply.toLowerCase()) {
-      case 'show recommendations':
-      case 'get recommendations':
-        response = await handleLocalChatCommand('recommend restaurants');
-        break;
-        
-      case 'popular restaurants':
-      case 'popular':
-        response = await handleLocalChatCommand('popular restaurants');
-        break;
-        
-      case 'my orders':
-      case 'order history':
-        response = await handleLocalChatCommand('my orders');
-        break;
-        
-      case 'my favorites':
-      case 'favorites':
-        response = await handleLocalChatCommand('my favorites');
-        break;
-        
-      case 'order food':
-      case 'order now':
-        response = await handleLocalChatCommand('I want to order food');
-        break;
-        
-      case 'browse restaurants':
-        response = {
-          role: 'bot',
-          content: "🏪 Here are all our available restaurants. You can also ask me for personalized recommendations!",
-          timestamp: new Date().toLocaleTimeString(),
-          restaurants: restaurants.slice(0, 6),
-          suggestions: ['Show recommendations', 'Popular only', 'Filter by cuisine']
-        };
-        break;
-        
-      case 'help me choose':
-        response = {
-          role: 'bot',
-          content: "🤔 I'd love to help you choose! Tell me what you're in the mood for:\n\n• What cuisine do you want?\n• How spicy do you like your food?\n• What's your budget range?\n• Any dietary restrictions?",
-          timestamp: new Date().toLocaleTimeString(),
-          suggestions: ['Pakistani food', 'Chinese food', 'Fast food', 'Italian food', 'Show recommendations']
-        };
-        break;
-        
-      default:
-        // Try to process as a regular message
-        response = await handleLocalChatCommand(reply) || await generateEnhancedLocalResponse(reply);
+  // Special handling for "Show recommendations"
+  if (reply === "Show recommendations" || reply === "get recommendations") {
+    if (!currentUser || currentUser.isAdmin) {
+      // For guests or admins, show regular response
+      const userMsg = {
+        role: 'user',
+        content: reply,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      const botResponse = {
+        role: 'bot',
+        content: "I'd love to show you personalized recommendations! Please login first to get recommendations based on your preferences. 🍕",
+        timestamp: new Date().toLocaleTimeString(),
+        suggestions: ['Login', 'Browse all restaurants', 'Popular restaurants']
+      };
+      
+      setMessages(prev => [...prev, userMsg, botResponse]);
+      return;
     }
     
-    setIsTyping(false);
-    if (response) {
-      setMessages(prev => [...prev, response]);
+    // For logged-in users, fetch enhanced recommendations
+    try {
+      console.log('📡 Fetching recommendations for user:', currentUser.id);
+      
+      const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${currentUser.id}?count=5&includeNew=true`);
+      const data = await response.json();
+      
+      console.log('📦 Quick reply recommendations API response:', data);
+      
+      const userMsg = {
+        role: 'user',
+        content: reply,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      if (data.success && data.recommendations && data.recommendations.length > 0) {
+        const botResponse = {
+          role: 'bot',
+          content: ` Here are my personalized recommendations for you, ${currentUser.name}!\n\nI found ${data.recommendations.length} restaurants that match your taste:`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'enhanced_recommendations',
+          recommendations: data.recommendations
+        };
+        
+        setMessages(prev => [...prev, userMsg, botResponse]);
+        console.log('✅ Enhanced recommendations displayed in chat');
+      } else {
+        // Fallback if no recommendations
+        const botResponse = {
+          role: 'bot',
+          content: `I'm still learning your preferences, ${currentUser.name}! Here are some popular restaurants to get you started:`,
+          timestamp: new Date().toLocaleTimeString(),
+          restaurants: restaurants.slice(0, 5), // Use regular restaurants
+          suggestions: ['Order food', 'Browse restaurants', 'My favorites']
+        };
+        
+        setMessages(prev => [...prev, userMsg, botResponse]);
+        console.log('⚠️ Used fallback recommendations');
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch recommendations:', error);
+      
+      // Error fallback
+      const userMsg = {
+        role: 'user',
+        content: reply,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      const botResponse = {
+        role: 'bot',
+        content: "I'm having trouble getting your personalized recommendations right now. Here are some popular options! 🍕",
+        timestamp: new Date().toLocaleTimeString(),
+        restaurants: restaurants.slice(0, 5),
+        suggestions: ['Try again', 'Browse all restaurants', 'Order food']
+      };
+      
+      setMessages(prev => [...prev, userMsg, botResponse]);
     }
-  }, 800);
+    
+    return;
+  }
 };
 
 // Enhanced message renderer
@@ -2628,7 +2338,7 @@ const renderEnhancedChatMessage = (msg, index) => {
           color: 'white'
         }}>
           <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-            <h4 style={{ margin: '0 0 5px 0', fontSize: '1.2rem' }}>🎯 Perfect Matches For You</h4>
+            <h4 style={{ margin: '0 0 5px 0', fontSize: '1.2rem' }}> Perfect Matches For You</h4>
             <p style={{ margin: 0, opacity: 0.9, fontSize: '0.9rem' }}>
               Based on your preferences and history
             </p>
@@ -3440,7 +3150,7 @@ const syncUserActionWithDataManager = (action, data) => {
     {currentUser && !currentUser.isAdmin && (
                       <div className="personalized-preview-section">
                         <div className="preview-header">
-                          <h2>🎯 Suggestions Just For You</h2>
+                          <h2> Suggestions Just For You</h2>
                           <p>Discover restaurants</p>
                         </div>
                         
@@ -3645,7 +3355,7 @@ const syncUserActionWithDataManager = (action, data) => {
                     <div className="ai-avatar">🍕</div>
                     <p className="chat-welcome">Hi! I'm your AI food assistant. I can help you:</p>
                     <div className="welcome-features">
-                      <div className="feature">🎯 Get personalized recommendations</div>
+                      <div className="feature"> Get personalized recommendations</div>
                       <div className="feature">🍔 Find restaurants by cuisine</div>
                       <div className="feature">💰 Filter by budget</div>
                       <div className="feature">🌶️ Match spice preferences</div>
@@ -3690,7 +3400,7 @@ const syncUserActionWithDataManager = (action, data) => {
 {msg.type === 'enhanced_recommendations' && msg.recommendations && (
   <div className="chat-enhanced-recommendations">
     <div className="enhanced-rec-header">
-      <h4>🎯 Perfect Matches For You</h4>
+      <h4> Perfect Matches For You</h4>
     </div>
     
     <div className="enhanced-rec-list">
@@ -4063,18 +3773,6 @@ const syncUserActionWithDataManager = (action, data) => {
             {option}
           </button>
         ))}
-      </div>
-    )}
-
-    {/* Loading indicator for order processing */}
-    {chatLoading && index === messages.length - 1 && (
-      <div className="chat-loading">
-        <div className="loading-dots">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <span>Processing your order...</span>
       </div>
     )}
   </div>
