@@ -14,6 +14,8 @@ const AdvancedRecommendationEngine = require('./services/advancedRecommendation'
 const { getChatbotResponse } = require('./services/chatbot');
 const { DynamicPricingEngine } = require('./services/dynamicPricing');
 const EnhancedChatbotService = require('./services/enhancedChatbot'); // FIXED: No destructuring
+const authRoutes = require('./routes/auth');
+const orderRoutes = require('./routes/orders');
 const pricingEngine = new DynamicPricingEngine();
 const enhancedChatbot = new EnhancedChatbotService();
 const advancedRecommendation = new AdvancedRecommendationEngine();
@@ -26,6 +28,8 @@ connectDB();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api/auth', authRoutes);
+app.use('/api/orders', orderRoutes);
 app.use(express.urlencoded({ extended: true }));
 console.log('🔧 Setting up routes...');
 console.log('🎯 Advanced Recommendation Engine status:', !!advancedRecommendation);
@@ -55,6 +59,60 @@ app.get('/api/test/enhanced', (req, res) => {
     });
 });
 
+// =============== DATABASE SETUP ROUTE ===============
+
+app.get('/api/setup-database', async (req, res) => {
+    try {
+        console.log('🌱 Setting up database with sample data...');
+        
+        // Check if data already exists
+        const userCount = await User.countDocuments();
+        const restaurantCount = await Restaurant.countDocuments();
+        
+        if (userCount > 0 && restaurantCount > 0) {
+            return res.json({
+                success: true,
+                message: 'Database already has data',
+                stats: {
+                    users: userCount,
+                    restaurants: restaurantCount,
+                    menuItems: await MenuItem.countDocuments(),
+                    orders: await Order.countDocuments()
+                }
+            });
+        }
+        
+        // Import and run seeder
+        const { seedDatabase } = require('./scripts/seedDatabase');
+        await seedDatabase();
+        
+        const stats = {
+            users: await User.countDocuments(),
+            restaurants: await Restaurant.countDocuments(),
+            menuItems: await MenuItem.countDocuments(),
+            orders: await Order.countDocuments()
+        };
+        
+        res.json({
+            success: true,
+            message: 'Database setup completed successfully',
+            stats: stats,
+            loginCredentials: [
+                { email: 'ahmed@example.com', password: '123456' },
+                { email: 'fatima@example.com', password: '123456' },
+                { email: 'hassan@example.com', password: '123456' }
+            ]
+        });
+        
+    } catch (error) {
+        console.error('Database setup error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error setting up database',
+            error: error.message
+        });
+    }
+});
 // =============== ENHANCED RECOMMENDATION ROUTES ===============
 
 app.get('/api/recommendations/advanced/:userId', async (req, res) => {
@@ -565,17 +623,43 @@ const applyDynamicPricing = async (req, res, next) => {
 // Root route - health check
 app.get('/', async (req, res) => {
     try {
+        const stats = {
+            users: await User.countDocuments(),
+            restaurants: await Restaurant.countDocuments(),
+            menuItems: await MenuItem.countDocuments(),
+            orders: await Order.countDocuments()
+        };
+        
         res.json({ 
             message: 'Welcome to Pakistani Food Delivery API! 🍕🥘',
             status: 'Server is running',
             database: 'MongoDB Connected',
+            stats: stats,
+            setupInstructions: 'Visit /api/setup-database to initialize sample data',
             endpoints: {
-                restaurants: '/api/restaurants',
-                menu: '/api/menu/:restaurantId',
-                recommendations: '/api/recommendations/:userId',
-                order: '/api/order',
-                chat: '/api/chat',
-                auth: '/api/auth'
+                // Authentication
+                register: 'POST /api/auth/register',
+                login: 'POST /api/auth/login',
+                profile: 'GET /api/auth/profile/:userId',
+                updatePreferences: 'PUT /api/auth/preferences/:userId',
+                
+                // Orders  
+                placeOrder: 'POST /api/orders/place-order',
+                userOrders: 'GET /api/orders/user/:userId',
+                reorder: 'POST /api/orders/reorder/:orderId',
+                
+                // Restaurants & Menu
+                restaurants: 'GET /api/restaurants',
+                restaurant: 'GET /api/restaurants/:id', 
+                menu: 'GET /api/menu/:restaurantId',
+                
+                // AI Features
+                recommendations: 'GET /api/recommendations/advanced/:userId',
+                chat: 'POST /api/chat',
+                search: 'GET /api/search',
+                
+                // Setup
+                setupDatabase: 'GET /api/setup-database'
             }
         });
     } catch (error) {
@@ -1372,4 +1456,10 @@ app.listen(PORT, () => {
     console.log('📍 Your API endpoints are ready!');
     console.log('🍕 Happy food ordering!');
     console.log('💾 Using MongoDB database');
+    console.log('\n🔧 Quick Setup:');
+    console.log(`   1. Visit http://localhost:${PORT}/api/setup-database to setup sample data`);
+    console.log(`   2. Use sample login: ahmed@example.com / 123456`);
+    console.log(`   3. Test recommendations: GET /api/recommendations/advanced/{userId}`);
+    console.log(`   4. Test authentication: POST /api/auth/login`);
+    console.log(`   5. Place orders: POST /api/orders/place-order`);
 });
