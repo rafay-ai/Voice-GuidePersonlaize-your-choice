@@ -13,9 +13,15 @@ const AdvancedRecommendationEngine = require('./services/advancedRecommendation'
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
 const { DynamicPricingEngine } = require('./services/dynamicPricing');
-const EnhancedChatbotService = require('./services/enhancedChatbot'); // FIXED: No destructuring
+const EnhancedChatbotService = require('./services/enhancedChatbot');
+
+// ✅ FIXED: Import auth routes properly
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
+
+// ✅ FIXED: Create middleware folder and file first, or comment out for now
+// const { authenticateUser } = require('./middleware/auth'); // Comment this out for now
+
 const pricingEngine = new DynamicPricingEngine();
 const enhancedChatbot = new EnhancedChatbotService();
 const advancedRecommendation = new AdvancedRecommendationEngine();
@@ -28,9 +34,12 @@ connectDB();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
-app.use(express.urlencoded({ extended: true }));
+
 console.log('🔧 Setting up routes...');
 console.log('🎯 Advanced Recommendation Engine status:', !!advancedRecommendation);
 
@@ -48,7 +57,7 @@ try {
     console.error('❌ Service test error:', error);
 }
 
-// Simple test route BEFORE your enhanced recommendations route
+// Simple test route
 app.get('/api/test/enhanced', (req, res) => {
     console.log('🧪 Test route hit');
     res.json({
@@ -60,7 +69,6 @@ app.get('/api/test/enhanced', (req, res) => {
 });
 
 // =============== DATABASE SETUP ROUTE ===============
-
 app.get('/api/setup-database', async (req, res) => {
     try {
         console.log('🌱 Setting up database with sample data...');
@@ -113,8 +121,8 @@ app.get('/api/setup-database', async (req, res) => {
         });
     }
 });
-// =============== ENHANCED RECOMMENDATION ROUTES ===============
 
+// =============== ENHANCED RECOMMENDATION ROUTES ===============
 app.get('/api/recommendations/advanced/:userId', async (req, res) => {
     console.log('🎯 Enhanced recommendations route hit!');
     console.log('   URL:', req.url);
@@ -335,7 +343,7 @@ app.get('/api/recommendations/advanced/:userId', async (req, res) => {
         } catch (fallbackError) {
             console.error('❌ Fallback also failed:', fallbackError);
             
-                            res.status(500).json({
+            res.status(500).json({
                 success: false,
                 message: 'Error generating recommendations',
                 error: error.message,
@@ -349,234 +357,7 @@ app.get('/api/recommendations/advanced/:userId', async (req, res) => {
         }
     }
 });
-// Get recommendation explanations
-app.get('/api/recommendations/explain/:userId/:restaurantId', async (req, res) => {
-    try {
-        const { userId, restaurantId } = req.params;
-        
-        // Get the specific restaurant
-        const restaurant = await Restaurant.findById(restaurantId);
-        if (!restaurant) {
-            return res.status(404).json({
-                success: false,
-                message: 'Restaurant not found'
-            });
-        }
-        
-        // Get user data for explanation
-        const user = await User.findById(userId);
-        const userOrders = await Order.find({ user: userId })
-            .populate('restaurant')
-            .sort({ createdAt: -1 })
-            .limit(10);
-        
-        // Calculate explanation factors
-        const explanation = await advancedRecommendation.calculateMultiFactorScore(
-            restaurant,
-            user,
-            userOrders,
-            { currentTime: new Date() }
-        );
-        
-        res.json({
-            success: true,
-            restaurant: restaurant.name,
-            explanation: {
-                personalMatch: `${Math.round(explanation.personalPreference * 100)}%`,
-                popularityScore: `${Math.round(explanation.popularity * 100)}%`,
-                timeRelevance: `${Math.round(explanation.temporal * 100)}%`,
-                overallScore: `${Math.round(
-                    (explanation.personalPreference * 0.35 + 
-                     explanation.collaborative * 0.25 + 
-                     explanation.contentBased * 0.20 + 
-                     explanation.temporal * 0.10 + 
-                     explanation.popularity * 0.10) * 100
-                )}%`,
-                reasons: [
-                    explanation.personalPreference > 0.6 ? "Matches your taste preferences" : null,
-                    explanation.collaborative > 0.5 ? "Popular with similar users" : null,
-                    explanation.temporal > 0.3 ? "Perfect timing for this meal" : null,
-                    explanation.popularity > 0.7 ? "Trending and highly rated" : null
-                ].filter(Boolean)
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Recommendation explanation error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error generating explanation',
-            error: error.message
-        });
-    }
-});
 
-// Update user preferences after order (for learning)
-app.post('/api/recommendations/learn/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const { orderData, feedback } = req.body;
-        
-        console.log('🧠 Learning from user behavior:', userId);
-        
-        // Update user profile based on order
-        await advancedRecommendation.updateUserProfile(userId, orderData);
-        
-        res.json({
-            success: true,
-            message: 'User preferences updated',
-            userId: userId
-        });
-        
-    } catch (error) {
-        console.error('❌ Learning update error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error updating user preferences',
-            error: error.message
-        });
-    }
-});
-
-// Get recommendation performance analytics
-app.get('/api/analytics/recommendations', async (req, res) => {
-    try {
-        const { timeRange = '30' } = req.query;
-        const daysBack = parseInt(timeRange);
-        const startDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
-        
-        // Get recommendation performance data
-        const totalOrders = await Order.countDocuments({
-            createdAt: { $gte: startDate }
-        });
-        
-        const recommendationOrders = await Order.countDocuments({
-            createdAt: { $gte: startDate },
-            'analytics.recommendationSource': { $exists: true, $ne: 'manual' }
-        });
-        
-        const conversionRate = totalOrders > 0 ? (recommendationOrders / totalOrders) * 100 : 0;
-        
-        // Get popular recommendation sources
-        const recommendationSources = await Order.aggregate([
-            { $match: { createdAt: { $gte: startDate } } },
-            { $group: { _id: '$analytics.recommendationSource', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-        ]);
-        
-        res.json({
-            success: true,
-            timeRange: `${daysBack} days`,
-            analytics: {
-                totalOrders,
-                recommendationOrders,
-                conversionRate: Math.round(conversionRate * 100) / 100,
-                recommendationSources,
-                manualOrders: totalOrders - recommendationOrders
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Recommendation analytics error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching recommendation analytics',
-            error: error.message
-        });
-    }
-});
-const handleQuickReply = async (reply) => {
-  console.log('🎯 Quick reply clicked:', reply);
-  
-  // Special handling for "Show recommendations"
-  if (reply === "Show recommendations") {
-    if (!currentUser || currentUser.isAdmin) {
-      // For guests or admins, show regular response
-      const userMsg = {
-        role: 'user',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      const botResponse = {
-        role: 'bot',
-        content: "I'd love to show you personalized recommendations! Please login first to get recommendations based on your preferences. 🍕",
-        timestamp: new Date().toLocaleTimeString(),
-        suggestions: ['Login', 'Browse all restaurants', 'Popular restaurants']
-      };
-      
-      setMessages(prev => [...prev, userMsg, botResponse]);
-      return;
-    }
-    
-    // For logged-in users, fetch enhanced recommendations
-    try {
-      console.log('📡 Fetching recommendations for user:', currentUser.id);
-      
-      const response = await fetch(`http://localhost:5000/api/recommendations/advanced/${currentUser.id}?count=5&includeNew=true`);
-      const data = await response.json();
-      
-      console.log('📦 Recommendations API response:', data);
-      
-      const userMsg = {
-        role: 'user',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      if (data.success && data.recommendations && data.recommendations.length > 0) {
-        const botResponse = {
-          role: 'bot',
-          content: `🎯 Here are my personalized recommendations for you, ${currentUser.name}!\n\nI found ${data.recommendations.length} restaurants that match your taste perfectly:`,
-          timestamp: new Date().toLocaleTimeString(),
-          type: 'enhanced_recommendations',
-          recommendations: data.recommendations
-        };
-        
-        setMessages(prev => [...prev, userMsg, botResponse]);
-        console.log('✅ Enhanced recommendations displayed');
-      } else {
-        // Fallback if no recommendations
-        const botResponse = {
-          role: 'bot',
-          content: `I'm still learning your preferences, ${currentUser.name}! Here are some popular restaurants to get you started:`,
-          timestamp: new Date().toLocaleTimeString(),
-          recommendations: restaurants.slice(0, 5), // Use regular restaurants
-          suggestions: ['Order food', 'Browse restaurants', 'My favorites']
-        };
-        
-        setMessages(prev => [...prev, userMsg, botResponse]);
-        console.log('⚠️ Used fallback recommendations');
-      }
-      
-    } catch (error) {
-      console.error('❌ Failed to fetch recommendations:', error);
-      
-      // Error fallback
-      const userMsg = {
-        role: 'user',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      const botResponse = {
-        role: 'bot',
-        content: "I'm having trouble getting your personalized recommendations right now. Here are some popular options! 🍕",
-        timestamp: new Date().toLocaleTimeString(),
-        recommendations: restaurants.slice(0, 5),
-        suggestions: ['Try again', 'Browse all restaurants', 'Order food']
-      };
-      
-      setMessages(prev => [...prev, userMsg, botResponse]);
-    }
-    
-    return;
-  }
-  
-  // For other quick replies, use the existing logic
-  setInputMessage(reply);
-  sendMessage();
-};
 // Dynamic Pricing Middleware
 const applyDynamicPricing = async (req, res, next) => {
     try {
@@ -620,6 +401,67 @@ const applyDynamicPricing = async (req, res, next) => {
     }
 };
 
+// ✅ FIXED: User preference update function BEFORE order route
+async function updateUserPreferencesAfterOrder(user, restaurant, order, orderItems) {
+    try {
+        console.log('🔧 Updating user preferences after order...');
+        
+        // Update order statistics
+        user.preferences.totalOrders = (user.preferences.totalOrders || 0) + 1;
+        user.preferences.totalSpent = (user.preferences.totalSpent || 0) + order.pricing.total;
+        user.preferences.averageOrderValue = user.preferences.totalSpent / user.preferences.totalOrders;
+        user.preferences.lastOrderDate = new Date();
+        
+        // Add restaurant to favorites if ordered frequently
+        if (!user.preferences.favoriteRestaurants.includes(restaurant._id)) {
+            const orderCount = await Order.countDocuments({
+                user: user._id,
+                restaurant: restaurant._id
+            });
+            
+            // Add to favorites if ordered 3+ times
+            if (orderCount >= 3) {
+                user.preferences.favoriteRestaurants.push(restaurant._id);
+            }
+        }
+        
+        // Update preferred cuisines
+        if (restaurant.cuisine && restaurant.cuisine.length > 0) {
+            if (!user.preferences.preferredCuisines) {
+                user.preferences.preferredCuisines = [];
+            }
+            
+            restaurant.cuisine.forEach(cuisine => {
+                if (!user.preferences.preferredCuisines.includes(cuisine)) {
+                    user.preferences.preferredCuisines.push(cuisine);
+                }
+            });
+        }
+        
+        // Update loyalty status based on total spent
+        const totalSpent = user.preferences.totalSpent;
+        if (totalSpent >= 50000) {
+            user.loyaltyStatus = 'Platinum';
+        } else if (totalSpent >= 25000) {
+            user.loyaltyStatus = 'Gold';
+        } else if (totalSpent >= 10000) {
+            user.loyaltyStatus = 'Silver';
+        } else if (totalSpent >= 2000) {
+            user.loyaltyStatus = 'Bronze';
+        }
+        
+        // Update loyalty points (1 point per 100 PKR spent)
+        const pointsEarned = Math.floor(order.pricing.total / 100);
+        user.loyaltyPoints = (user.loyaltyPoints || 0) + pointsEarned;
+        
+        await user.save();
+        console.log('✅ User preferences updated successfully');
+        
+    } catch (error) {
+        console.error('❌ Error updating user preferences:', error);
+    }
+}
+
 // Root route - health check
 app.get('/', async (req, res) => {
     try {
@@ -644,9 +486,8 @@ app.get('/', async (req, res) => {
                 updatePreferences: 'PUT /api/auth/preferences/:userId',
                 
                 // Orders  
-                placeOrder: 'POST /api/orders/place-order',
-                userOrders: 'GET /api/orders/user/:userId',
-                reorder: 'POST /api/orders/reorder/:orderId',
+                placeOrder: 'POST /api/order',
+                userOrders: 'GET /api/orders/:userId',
                 
                 // Restaurants & Menu
                 restaurants: 'GET /api/restaurants',
@@ -686,30 +527,6 @@ app.get('/api/restaurants', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching restaurants',
-            error: error.message
-        });
-    }
-});
-
-// Get restaurants by cuisine
-app.get('/api/restaurants/cuisine/:cuisine', async (req, res) => {
-    try {
-        const cuisine = req.params.cuisine;
-        const restaurants = await Restaurant.find({
-            isActive: true,
-            cuisine: { $regex: cuisine, $options: 'i' }
-        }).sort({ rating: -1 });
-        
-        res.json({
-            success: true,
-            cuisine: cuisine,
-            count: restaurants.length,
-            data: restaurants
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching restaurants by cuisine',
             error: error.message
         });
     }
@@ -775,63 +592,17 @@ app.get('/api/menu/:restaurantId', async (req, res) => {
     }
 });
 
-// =============== USER & RECOMMENDATION ROUTES ===============
-// Get user recommendations
-app.get('/api/recommendations/:userId', async (req, res) => {
-    try {
-        const userId = req.params.userId;
-        
-        // Find user
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-        
-        // Get user's order history
-        const userOrders = await Order.find({ user: userId })
-            .populate('restaurant')
-            .sort({ createdAt: -1 });
-        
-        // Get recommended restaurants based on user preferences
-        let recommendedRestaurants;
-        if (user.preferences.preferredCuisines.length > 0) {
-            recommendedRestaurants = await Restaurant.find({
-                isActive: true,
-                cuisine: { $in: user.preferences.preferredCuisines }
-            }).limit(5).sort({ rating: -1 });
-        } else {
-            // If no preferences, recommend top-rated restaurants
-            recommendedRestaurants = await Restaurant.find({ isActive: true })
-                .limit(5)
-                .sort({ rating: -1 });
-        }
-        
-        res.json({
-            success: true,
-            user_preferences: user.preferences,
-            order_count: userOrders.length,
-            recommendations: recommendedRestaurants,
-            last_order: userOrders[0] || null
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching recommendations',
-            error: error.message
-        });
-    }
-});
-
 // =============== ORDER ROUTES ===============
-// Place an order
+// ✅ FIXED: Simplified order placement without authentication for now
 app.post('/api/order', applyDynamicPricing, async (req, res) => {
     try {
         const { userId, restaurantId, items, deliveryAddress, paymentMethod, specialInstructions } = req.body;
         
-        console.log('📦 Received order data:', { userId, restaurantId, items: items?.length });
+        console.log('📦 Order placement:', { 
+            userId, 
+            restaurantId, 
+            items: items?.length 
+        });
         
         // Validation
         if (!userId || !restaurantId || !items || !deliveryAddress) {
@@ -840,23 +611,26 @@ app.post('/api/order', applyDynamicPricing, async (req, res) => {
                 message: 'Missing required fields'
             });
         }
-        
-        // FLEXIBLE USER HANDLING: Try to find user, if not found, use the ID as-is
-        let user = null;
-        let userObjectId = userId;
-        
-        try {
-            if (userId.match(/^[0-9a-fA-F]{24}$/)) {
-                user = await User.findById(userId);
-                console.log('✅ Found user:', user?.name);
-            } else {
-                console.log('⚠️ UserId is not a valid ObjectId, using as-is:', userId);
-                userObjectId = '6870bd22f7b37e4543eebd97';
-            }
-        } catch (userError) {
-            console.log('⚠️ User lookup failed, using default ObjectId');
-            userObjectId = '6870bd22f7b37e4543eebd97';
+
+        // Validate user ID format
+        if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid user ID format. Please login first.',
+                error: 'INVALID_USER_ID'
+            });
         }
+
+        // Find user
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found. Please login again.'
+            });
+        }
+
+        console.log('✅ Found user:', user.name);
         
         // Verify restaurant exists
         const restaurant = await Restaurant.findById(restaurantId);
@@ -867,7 +641,7 @@ app.post('/api/order', applyDynamicPricing, async (req, res) => {
                 message: 'Restaurant not found'
             });
         }
-        
+
         console.log('✅ Found restaurant:', restaurant.name);
         
         // Calculate pricing
@@ -932,10 +706,10 @@ app.post('/api/order', applyDynamicPricing, async (req, res) => {
         
         console.log('💰 Order totals:', { subtotal, deliveryFee: dynamicDeliveryFee, total });
         
-        // Create order with enhanced pricing data
+        // ✅ FIXED: Create order with correct user ID
         const newOrder = new Order({
             orderNumber: orderNumber,
-            user: userObjectId,
+            user: userId, // ✅ Using userId directly
             restaurant: restaurantId,
             items: orderItems,
             deliveryAddress: {
@@ -971,6 +745,9 @@ app.post('/api/order', applyDynamicPricing, async (req, res) => {
         await newOrder.save();
         console.log('✅ Order saved:', orderNumber);
         
+        // ✅ FIXED: Update user preferences after order
+        await updateUserPreferencesAfterOrder(user, restaurant, newOrder, orderItems);
+        
         // Populate the order for response
         await newOrder.populate(['restaurant', 'items.menuItem']);
         
@@ -978,6 +755,13 @@ app.post('/api/order', applyDynamicPricing, async (req, res) => {
             success: true,
             message: "Order placed successfully!",
             order: newOrder,
+            user: {
+                name: user.name,
+                loyaltyStatus: user.loyaltyStatus,
+                loyaltyPoints: user.loyaltyPoints,
+                totalOrders: user.preferences?.totalOrders || 0,
+                totalSpent: user.preferences?.totalSpent || 0
+            },
             dynamicPricing: req.dynamicPricing || null
         });
         
@@ -1060,59 +844,6 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Add new endpoint for order actions
-app.post('/api/chat/order-action', async (req, res) => {
-    const { action, userId, orderData } = req.body;
-    
-    try {
-        let response;
-        
-        switch (action) {
-            case 'confirm_reorder':
-                response = await enhancedChatbot.confirmReorder(userId, orderData);
-                break;
-            case 'modify_cart':
-                response = await enhancedChatbot.modifyCart(userId, orderData);
-                break;
-            case 'place_order':
-                response = await enhancedChatbot.finalizeOrder(userId, orderData);
-                break;
-            default:
-                response = { message: 'Unknown action', type: 'error' };
-        }
-        
-        res.json({
-            success: true,
-            action,
-            response
-        });
-    } catch (error) {
-        console.error('Order action error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error processing order action',
-            error: error.message
-        });
-    }
-});
-
-// Add endpoint for quick suggestions
-app.get('/api/chat/suggestions/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const suggestions = await enhancedChatbot.getPersonalizedSuggestions(userId);
-        
-        res.json({
-            success: true,
-            suggestions
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error getting suggestions'
-        });
-    }
-});
 // =============== SEARCH ROUTE ===============
 app.get('/api/search', async (req, res) => {
     try {
@@ -1185,6 +916,7 @@ app.get('/api/areas/:city', async (req, res) => {
         });
     }
 });
+
 // =============== ANALYTICS ROUTES ===============
 // Get dashboard analytics
 app.get('/api/analytics/dashboard', async (req, res) => {
@@ -1280,38 +1012,7 @@ app.get('/api/analytics/dashboard', async (req, res) => {
     }
 });
 
-// Get sales trends (last 7 days)
-app.get('/api/analytics/sales-trends', async (req, res) => {
-    try {
-        const salesTrends = await Order.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-                }
-            },
-            {
-                $group: {
-                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-                    orders: { $sum: 1 },
-                    revenue: { $sum: "$pricing.total" }
-                }
-            },
-            { $sort: { _id: 1 } }
-        ]);
-
-        res.json({
-            success: true,
-            data: salesTrends
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching sales trends',
-            error: error.message
-        });
-    }
-});
-
+// =============== DYNAMIC PRICING ROUTES ===============
 console.log('🚀 Setting up Dynamic Pricing routes...');
 
 // Get dynamic price for a delivery
@@ -1434,7 +1135,6 @@ app.get('/api/pricing/analytics/:restaurantId', async (req, res) => {
     }
 });
 
-
 // =============== ERROR HANDLING ===============
 app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
@@ -1450,6 +1150,7 @@ console.log('🎯 New pricing endpoints available:');
 console.log('   POST /api/pricing/calculate-price');
 console.log('   GET  /api/pricing/analytics/:restaurantId');
 console.log('   POST /api/pricing/surge-status');
+
 // Start the server
 app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
@@ -1461,5 +1162,5 @@ app.listen(PORT, () => {
     console.log(`   2. Use sample login: ahmed@example.com / 123456`);
     console.log(`   3. Test recommendations: GET /api/recommendations/advanced/{userId}`);
     console.log(`   4. Test authentication: POST /api/auth/login`);
-    console.log(`   5. Place orders: POST /api/orders/place-order`);
+    console.log(`   5. Place orders: POST /api/order`);
 });
