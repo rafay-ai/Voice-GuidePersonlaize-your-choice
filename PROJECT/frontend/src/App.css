@@ -5156,3 +5156,310 @@ body {
   background: #5a67d8;
   transform: translateY(-1px);
 }
+/* ===== INTEGRATED RESTAURANT SECTION STYLING ===== */
+/* Replace your existing restaurant styles with these in App.css */
+
+/* Section Container - Matches your app's style */
+.restaurants-section {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.regular-restaurants {
+  background: transparent;
+  padding: 20px 0;
+}
+
+/* Header - Consistent with app typography */
+.restaurants-section h2 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  padding-left: 0;
+  border-bottom: none;
+}
+
+/* Grid - Improved spacing */
+.restaurant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 0;
+}
+
+/* Restaurant Cards - More compact size */
+.restaurant-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid #f0f0f0;
+  position: relative;
+  overflow: visible;
+  max-width: 350px;
+}
+
+.restaurant-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  border-color: #e0e0e0;
+}
+
+/* Restaurant Name - More compact */
+.restaurant-card h3 {
+  color: #2c3e50;
+  margin-bottom: 6px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Cuisine - Smaller spacing */
+.cuisine {
+  color: #7f8c8d;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+/* Info Section - Tighter layout */
+.restaurant-info {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Rating Badge - Smaller size */
+.restaurant-info span:nth-child(2) {
+  background-color: #27ae60;
+  color: white;
+  padding: 3px 7px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* First span (rating) - Smaller text */
+.restaurant-info span:nth-child(1) {
+  color: #f39c12;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+/* Third span (delivery) - Smaller text */
+.restaurant-info span:nth-child(3) {
+  color: #7f8c8d;
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+/* Min Order - More compact */
+.min-order {
+  color: #95a5a6;
+  font-size: 0.8rem;
+  margin-top: 6px;
+  font-weight: 400;
+}
+
+/* Favorite Heart - Smaller size */
+.favorite-heart {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 2;
+}
+
+.favorite-heart:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.favorite-heart.active {
+  background: #e74c3c;
+  color: white;
+}
+
+/* Status Badges - Smaller positioning */
+.restaurant-status-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 3px 6px;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  z-index: 1;
+}
+
+.restaurant-status-badge.popular {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.restaurant-status-badge.new {
+  background-color: #3498db;
+  color: white;
+}
+
+.restaurant-status-badge.trending {
+  background-color: #f39c12;
+  color: white;
+}
+
+/* Loading state - Subtle animation */
+.restaurant-card.loading {
+  opacity: 0;
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced hover effect */
+.restaurant-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(52, 152, 219, 0.02) 100%);
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.restaurant-card:hover::before {
+  opacity: 1;
+}
+
+/* Fast Delivery Badge */
+.restaurant-card.fast-delivery::after {
+  content: '⚡ Fast';
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  background-color: #27ae60;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Featured Restaurant Highlight */
+.restaurant-card.featured {
+  border: 2px solid #3498db;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.restaurant-card.featured h3::after {
+  content: '⭐';
+  margin-left: 8px;
+  color: #f39c12;
+}
+
+/* Mobile Responsive - Smaller sizing */
+@media (max-width: 768px) {
+  .restaurant-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  
+  .restaurant-card {
+    padding: 14px;
+  }
+  
+  .restaurant-card h3 {
+    font-size: 1rem;
+  }
+  
+  .restaurant-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  
+  .favorite-heart {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}
+
+/* Empty State Styling - If no restaurants */
+.no-restaurants {
+  text-align: center;
+  padding: 60px 20px;
+  color: #7f8c8d;
+}
+
+.no-restaurants h3 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 1.3rem;
+}
+
+/* Loading Skeleton for restaurant cards */
+.restaurant-skeleton {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+.restaurant-skeleton .skeleton-line {
+  height: 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.restaurant-skeleton .skeleton-line.title {
+  height: 16px;
+  width: 70%;
+}
+
+.restaurant-skeleton .skeleton-line.subtitle {
+  width: 50%;
+}
+
+.restaurant-skeleton .skeleton-line.info {
+  width: 30%;
+  height: 10px;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  100% { opacity: 0.7; }
+}

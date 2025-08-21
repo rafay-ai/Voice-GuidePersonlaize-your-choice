@@ -500,8 +500,6 @@
     const fetchAnalytics = useCallback(() => {
       
       setTimeout(() => {
-        const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
-       
         const restaurantOrders = {};
         allOrders.forEach(order => {
           const restName = order.restaurant;
@@ -525,6 +523,24 @@
   // Initialize enhanced data manager when app loads
   dataManager.initializeData();
 }, []);
+
+useEffect(() => {
+  console.log('🔄 New user effect triggered', {
+    isNewUser,
+    currentUser: currentUser?.name,
+    showChat,
+    isOnboardingActive,
+    messagesLength: messages.length
+  });
+  
+  // If it's a new user and chat is open but onboarding hasn't started
+  if (isNewUser && showChat && currentUser && !isOnboardingActive && messages.length === 0) {
+    console.log('🚀 Auto-starting onboarding from useEffect...');
+    setTimeout(() => {
+      startOnboarding();
+    }, 1000);
+  }
+}, [isNewUser, showChat, currentUser, isOnboardingActive, messages.length]);
 
     useEffect(() => {
       const savedUser = localStorage.getItem('currentUser');
@@ -684,156 +700,221 @@
 
     // ===== AUTH FUNCTIONS =====
   const handleLogin = async (e) => {
-    e.preventDefault();
-    
-    // Admin login
-    if (authForm.email === 'admin@food.pk' && authForm.password === 'admin123') {
-        const adminUser = {
-            id: 'admin_user',
-            name: 'Admin',
-            email: authForm.email,
-            isAdmin: true
-        };
-        
-        setCurrentUser(adminUser);
-        localStorage.setItem('currentUser', JSON.stringify(adminUser));
-        setShowAuth(false);
-        setShowAdminDashboard(true);
-        alert('Welcome Admin!');
-        setAuthForm({ name: '', email: '', password: '', phone: '' });
-        return;
-    }
-    
-    // Test Users with Different Preferences
-    const testUsers = {
-        'budget@test.com': {
-            id: '6870bd22f7b37e4543eebd97',
-            name: 'Ahmed Budget',
-            description: 'Pakistani food lover, budget-conscious'
-        },
-        'kfc@test.com': {
-            id: '6870bd84e75152da7d6afb6a', 
-            name: 'Sara KFC Lover',
-            description: 'Fast food enthusiast'
-        },
-        'pizza@test.com': {
-            id: '6870be12f7b37e4543eebd99',
-            name: 'Ali Pizza Fan', 
-            description: 'Italian food lover, premium budget'
-        },
-        'chinese@test.com': {
-            id: '6870be45f7b37e4543eebd9a',
-            name: 'Li Wei',
-            description: 'Chinese & Asian cuisine lover'
-        },
-        'healthy@test.com': {
-            id: '6870be78f7b37e4543eebd9b',
-            name: 'Ayesha Fitness',
-            description: 'Health-conscious, vegetarian options'
-        },
-        'bbq@test.com': {
-            id: '6870beabf7b37e4543eebd9c',
-            name: 'Hassan BBQ King',
-            description: 'BBQ & traditional Pakistani food lover'
-        },
-        'premium@test.com': {
-            id: '6870beded7b37e4543eebd9d',
-            name: 'Fatima Elite',
-            description: 'Premium dining, continental cuisine'
-        }
+  e.preventDefault();
+  
+  // Admin login (keep existing logic)
+  if (authForm.email === 'admin@food.pk' && authForm.password === 'admin123') {
+    const adminUser = {
+      id: 'admin_user',
+      name: 'Admin',
+      email: authForm.email,
+      isAdmin: true
     };
     
-    // Check if it's a test user
-    if (testUsers[authForm.email]) {
-        const testUser = testUsers[authForm.email];
-        const user = {
-            id: testUser.id,
-            name: testUser.name,
-            email: authForm.email,
-            phone: '0321-1234567',
-            isAdmin: false,
-            description: testUser.description
-        };
-        
-        setCurrentUser(user);
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        setShowAuth(false);
-        alert(`Welcome back, ${user.name}!\n${user.description}`);
-        setAuthForm({ name: '', email: '', password: '', phone: '' });
-        return;
+    setCurrentUser(adminUser);
+    localStorage.setItem('currentUser', JSON.stringify(adminUser));
+    setShowAuth(false);
+    setShowAdminDashboard(true);
+    alert('Welcome Admin!');
+    setAuthForm({ name: '', email: '', password: '', phone: '' });
+    return;
+  }
+  
+  // Test Users (keep existing logic)
+  const testUsers = {
+    'budget@test.com': {
+      id: '6870bd22f7b37e4543eebd97',
+      name: 'Ahmed Budget',
+      description: 'Pakistani food lover, budget-conscious'
+    },
+    'kfc@test.com': {
+      id: '6870bd84e75152da7d6afb6a', 
+      name: 'Sara KFC Lover',
+      description: 'Fast food enthusiast'
+    },
+    'pizza@test.com': {
+      id: '6870be12f7b37e4543eebd99',
+      name: 'Ali Pizza Fan', 
+      description: 'Italian food lover, premium budget'
+    },
+    'chinese@test.com': {
+      id: '6870be45f7b37e4543eebd9a',
+      name: 'Li Wei',
+      description: 'Chinese & Asian cuisine lover'
+    },
+    'healthy@test.com': {
+      id: '6870be78f7b37e4543eebd9b',
+      name: 'Ayesha Fitness',
+      description: 'Health-conscious, vegetarian options'
+    },
+    'bbq@test.com': {
+      id: '6870beabf7b37e4543eebd9c',
+      name: 'Hassan BBQ King',
+      description: 'BBQ & traditional Pakistani food lover'
+    },
+    'premium@test.com': {
+      id: '6870beded7b37e4543eebd9d',
+      name: 'Fatima Elite',
+      description: 'Premium dining, continental cuisine'
+    }
+  };
+  
+  if (testUsers[authForm.email]) {
+    const testUser = testUsers[authForm.email];
+    const user = {
+      id: testUser.id,
+      name: testUser.name,
+      email: authForm.email,
+      phone: '0321-1234567',
+      isAdmin: false,
+      description: testUser.description
+    };
+    
+    setCurrentUser(user);
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    setShowAuth(false);
+    alert(`Welcome back, ${user.name}!\n${user.description}`);
+    setAuthForm({ name: '', email: '', password: '', phone: '' });
+    return;
+  }
+  
+  // REAL USER LOGIN VIA API
+  try {
+    console.log('🔄 Attempting login for:', authForm.email);
+    
+    const response = await fetch('http://localhost:5000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: authForm.email,
+        password: authForm.password
+      })
+    });
+    
+    const data = await response.json();
+    console.log('📦 Login response:', data);
+    
+    if (data.success) {
+      const user = {
+        id: data.user.id, // ✅ Real MongoDB ObjectId
+        name: data.user.name,
+        email: data.user.email,
+        phone: data.user.phone,
+        isAdmin: false
+      };
+      
+      setCurrentUser(user);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      setShowAuth(false);
+      alert(`Welcome back, ${user.name}!`);
+      setAuthForm({ name: '', email: '', password: '', phone: '' });
+      
+    } else {
+      console.error('❌ Login failed:', data.message);
+      alert(data.message || 'Invalid email or password.');
     }
     
-    // For any other email, create a guest user with fallback recommendations
-    if (authForm.email && authForm.password) {
-        const user = {
-            id: 'guest_user', // This will trigger fallback recommendations
-            name: authForm.name || 'Guest User',
-            email: authForm.email,
-            phone: authForm.phone,
-            isAdmin: false,
-            isGuest: true
-        };
-        
-        setCurrentUser(user);
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        setShowAuth(false);
-        alert(`Welcome, ${user.name}! You're using guest mode with general recommendations.`);
-        setAuthForm({ name: '', email: '', password: '', phone: '' });
-    }
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    alert('Failed to login. Please check your connection and try again.');
+  }
 };
 
 const handleSignup = async (e) => {
   e.preventDefault();
   
   if (authForm.name && authForm.email && authForm.password && authForm.phone) {
-    const newUser = {
-      id: `user_${Date.now()}`,
-      name: authForm.name,
-      email: authForm.email,
-      phone: authForm.phone,
-      isAdmin: false,
-      isNewUser: true
-    };
-    
-    setCurrentUser(newUser);
-    localStorage.setItem('currentUser', JSON.stringify(newUser));
-    setShowAuth(false);
-    setIsNewUser(true);
-    setIsOnboardingActive(false);
-    
-    setAuthForm({ name: '', email: '', password: '', phone: '' });
-    
-    alert(`Welcome ${newUser.name}! Click the chat button to set up your preferences.`);
+    try {
+      console.log('🔄 Creating new user in MongoDB...');
+      
+      // CREATE USER IN MONGODB VIA API
+      const response = await fetch('http://localhost:5000/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: authForm.name,
+          email: authForm.email,
+          password: authForm.password,
+          phone: authForm.phone
+        })
+      });
+      
+      const data = await response.json();
+      console.log('📦 User creation response:', data);
+      
+      if (data.success) {
+        // USE THE REAL MONGODB USER
+        const newUser = {
+          id: data.user.id, // ✅ Real MongoDB ObjectId
+          name: data.user.name,
+          email: data.user.email,
+          phone: data.user.phone,
+          isAdmin: false,
+          isNewUser: true
+        };
+        
+        setCurrentUser(newUser);
+        localStorage.setItem('currentUser', JSON.stringify(newUser));
+        setShowAuth(false);
+        setIsNewUser(true);
+        
+        console.log('✅ User created successfully with ID:', newUser.id);
+        alert(`Welcome ${newUser.name}! Your account has been created.`);
+        setAuthForm({ name: '', email: '', password: '', phone: '' });
+        
+      } else {
+        console.error('❌ User creation failed:', data.message);
+        alert(data.message || 'Failed to create account. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Signup error:', error);
+      alert('Failed to create account. Please check your connection and try again.');
+    }
   }
 };
 
     // ===== ENHANCED CHATBOT FUNCTIONS =====
     const startOnboarding = () => {
-    if (isOnboardingActive) {
-      console.log('⚠️ Onboarding already in progress, skipping...');
-      return;
-    }
-    
-    console.log('🚀 Starting onboarding process...');
-    setIsOnboardingActive(true);
-    setCurrentOnboardingStep(0);
-    setUserPreferences({});
-    
-    // Clear previous messages and start fresh
-    setMessages([{
-      role: 'bot',
-      content: `Welcome to Pakistani Food Delivery, ${currentUser?.name || 'there'}! 🎉\n\nI'm your AI food assistant and I'll help you discover the perfect meals based on your preferences. Let's get to know your taste!`,
-      isOnboarding: true,
-      timestamp: new Date().toLocaleTimeString()
-    }]);
-    
-    setTimeout(() => {
-      if (isOnboardingActive) {
-        console.log('📝 Showing first onboarding question...');
-        showNextOnboardingQuestion();
-      }
-    }, 2000);
+  console.log('🚀 startOnboarding called', {
+    isOnboardingActive,
+    currentUser: currentUser?.name,
+    isNewUser
+  });
+  
+  if (isOnboardingActive) {
+    console.log('⚠️ Onboarding already in progress, skipping...');
+    return;
+  }
+  
+  if (!currentUser) {
+    console.log('❌ No current user, cannot start onboarding');
+    return;
+  }
+  
+  console.log('✅ Starting onboarding process...');
+  setIsOnboardingActive(true);
+  setCurrentOnboardingStep(0);
+  setUserPreferences({});
+  
+  // Clear previous messages and start fresh
+  const welcomeMessage = {
+    role: 'bot',
+    content: `Welcome to Pakistani Food Delivery, ${currentUser?.name || 'there'}! 🎉\n\nI'm your AI food assistant and I'll help you discover the perfect meals based on your preferences. Let's get to know your taste!`,
+    isOnboarding: true,
+    timestamp: new Date().toLocaleTimeString()
   };
+  
+  setMessages([welcomeMessage]);
+  
+  // Show first question after welcome
+  setTimeout(() => {
+    if (isOnboardingActive && currentUser) {
+      console.log('📝 Showing first onboarding question...');
+      showNextOnboardingQuestion();
+    }
+  }, 2000);
+};
 
   // Updated showNextOnboardingQuestion function
   const showNextOnboardingQuestion = () => {
@@ -932,17 +1013,14 @@ const handleSignup = async (e) => {
 };
 
 const handleOptionSelect = (option, questionKey) => {
+  console.log('✅ Option selected:', option, 'for key:', questionKey);
+  console.log('🔧 Current step:', currentOnboardingStep);
+  console.log('🔧 Total questions:', onboardingQuestions.length);
+  
   if (!isOnboardingActive) {
-    console.log('⚠️ Onboarding not active, ignoring option select...');
+    console.log('⚠️ Onboarding not active, ignoring...');
     return;
   }
-  
-  console.log('✅ Processing option selection:', { 
-    option, 
-    questionKey, 
-    currentStep: currentOnboardingStep,
-    totalQuestions: onboardingQuestions.length 
-  });
   
   // Add user's response to chat
   setMessages(prev => [...prev, {
@@ -958,21 +1036,29 @@ const handleOptionSelect = (option, questionKey) => {
   
   const nextStep = currentOnboardingStep + 1;
   setCurrentOnboardingStep(nextStep);
+  console.log('➡️ Moving to step:', nextStep);
   
   // Short delay before next question
   setTimeout(() => {
-    if (isOnboardingActive) {
-      if (nextStep < onboardingQuestions.length) {
-        console.log(`📝 Moving to step ${nextStep + 1}/${onboardingQuestions.length}`);
-        showNextOnboardingQuestion();
-      } else {
-        console.log('🎉 Completing preference update...');
-        completeOnboarding(newPrefs);
-      }
+    if (nextStep < onboardingQuestions.length) {
+      console.log(`📝 Showing question ${nextStep + 1}/${onboardingQuestions.length}`);
+      
+      const nextQuestion = onboardingQuestions[nextStep];
+      const questionMessage = {
+        role: 'bot',
+        content: nextQuestion.question,
+        questionData: nextQuestion,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      setMessages(prev => [...prev, questionMessage]);
+    } else {
+      console.log('🎉 All questions completed!');
+      // Complete onboarding
+      completeOnboarding(newPrefs);
     }
-  }, 800); // Slightly longer delay for better UX
+  }, 1000);
 };
-
   const EnhancedRecommendationsSection = () => {
     console.log(' EnhancedRecommendationsSection rendering...', {
         currentUser: currentUser?.name,
@@ -1300,514 +1386,6 @@ const handleOptionSelect = (option, questionKey) => {
         </div>
     );
 };
-
-
-// Add this to replace your current SimpleEnhancedRecommendations
-const FixedEnhancedRecommendations = () => {
-    console.log(' FixedEnhancedRecommendations rendering...', {
-        currentUser: currentUser?.name,
-        recommendationsCount: enhancedRecommendations?.length || 0,
-        loadingEnhancedRecs,
-        showEnhancedRecs
-    });
-
-    // Safety check for user
-    if (!currentUser || currentUser.isAdmin) {
-        console.log('❌ No user or admin user, not showing enhanced recs');
-        return null;
-    }
-
-    // Ensure recommendations is always an array
-    const safeRecommendations = Array.isArray(enhancedRecommendations) ? enhancedRecommendations : [];
-
-    const getMatchScoreColor = (score) => {
-        if (score >= 80) return '#27ae60';
-        if (score >= 60) return '#f39c12';
-        return '#e74c3c';
-    };
-
-    const formatExplanation = (explanation) => {
-        if (!explanation || typeof explanation !== 'string') return '💡 Recommended';
-        
-        const iconMap = {
-            'based on your preferences': '',
-            'popular choice': '🔥', 
-            'highly rated': '⭐',
-            'recommended for you': '💫',
-            'new restaurant': '🆕',
-            'fast delivery': '⚡',
-            'matches your preferences': '❤️',
-            'popular with similar users': '👥',
-            'perfect for this time': '⏰',
-            'trending now': '🔥'
-        };
-        
-        const lowerExplanation = explanation.toLowerCase();
-        for (const [key, icon] of Object.entries(iconMap)) {
-            if (lowerExplanation.includes(key)) {
-                return `${icon} ${explanation}`;
-            }
-        }
-        return `💡 ${explanation}`;
-    };
-
-    // Loading State
-    if (loadingEnhancedRecs) {
-        return (
-            <div className="enhanced-recommendations-section" style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '15px',
-                padding: '30px',
-                margin: '20px 0',
-                color: 'white',
-                textAlign: 'center'
-            }}>
-                <h2> Finding Your Perfect Restaurants</h2>
-                <p>Our AI is analyzing your preferences...</p>
-                <div style={{
-                    display: 'inline-block',
-                    width: '40px',
-                    height: '40px',
-                    border: '4px solid rgba(255,255,255,0.3)',
-                    borderTop: '4px solid white',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '20px 0'
-                }}></div>
-                <p>This may take a moment...</p>
-            </div>
-        );
-    }
-
-    // Empty State
-    if (safeRecommendations.length === 0) {
-        return (
-            <div className="enhanced-recommendations-section" style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '15px',
-                padding: '30px',
-                margin: '20px 0',
-                color: 'white',
-                textAlign: 'center'
-            }}>
-                <h2> Your Personalized Dashboard</h2>
-                <p>We're building your taste profile...</p>
-                <div style={{ fontSize: '3rem', margin: '20px 0' }}>🍽️</div>
-                <h3>Getting To Know Your Taste</h3>
-                <p>Order from restaurants to help us personalize recommendations!</p>
-                <div style={{ marginTop: '20px', display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <button 
-                        style={{
-                            background: 'rgba(255,255,255,0.2)',
-                            color: 'white',
-                            border: '2px solid rgba(255,255,255,0.4)',
-                            padding: '12px 24px',
-                            borderRadius: '25px',
-                            cursor: 'pointer',
-                            fontWeight: '600'
-                        }}
-                        onClick={() => {
-                            console.log('🔄 Manual refresh clicked');
-                            fetchEnhancedRecommendations(currentUser.id);
-                        }}
-                    >
-                         Get Recommendations
-                    </button>
-                    <button 
-                        style={{
-                            background: 'transparent',
-                            color: 'white',
-                            border: '2px solid rgba(255,255,255,0.4)',
-                            padding: '12px 24px',
-                            borderRadius: '25px',
-                            cursor: 'pointer',
-                            fontWeight: '600'
-                        }}
-                        onClick={() => {
-                            setShowChat(true);
-                            setTimeout(() => startOnboarding(), 500);
-                        }}
-                    >
-                        ⚙️ Set Preferences
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    // Main Recommendations Display
-    return (
-        <div className="enhanced-recommendations-section" style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '15px',
-            padding: '30px',
-            margin: '20px 0',
-            color: 'white',
-            position: 'relative',
-            overflow: 'hidden'
-        }}>
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                <h2 style={{ fontSize: '1.8rem', marginBottom: '8px' }}> Perfect Matches For You</h2>
-                <p style={{ opacity: '0.9', marginBottom: '20px' }}>Based on your preferences and ordering history</p>
-                
-                <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    gap: '40px', 
-                    flexWrap: 'wrap' 
-                }}>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '2rem', fontWeight: '700' }}>
-                            {safeRecommendations.length}
-                        </div>
-                        <div style={{ fontSize: '0.9rem', opacity: '0.8' }}>Perfect Matches</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '2rem', fontWeight: '700' }}>
-                            {safeRecommendations.length > 0 ? 
-                                Math.round(safeRecommendations.reduce((acc, rec) => {
-                                    const score = rec?.matchPercentage || rec?.score || 0;
-                                    return acc + (typeof score === 'number' ? score : 0);
-                                }, 0) / safeRecommendations.length) : 0
-                            }%
-                        </div>
-                        <div style={{ fontSize: '0.9rem', opacity: '0.8' }}>Avg Match</div>
-                    </div>
-                </div>
-            </div>
-            
-            {/* Recommendations Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: '20px',
-                marginBottom: '30px'
-            }}>
-                {safeRecommendations.slice(0, 6).map((rec, index) => {
-                    // Safe data extraction
-                    if (!rec || typeof rec !== 'object') {
-                        console.warn('❌ Invalid recommendation at index:', index);
-                        return null;
-                    }
-
-                    const restaurantName = rec.name || rec.restaurant?.name || 'Unknown Restaurant';
-                    const restaurantId = rec.id || rec._id || rec.restaurant?._id || `unknown_${index}`;
-                    const cuisine = rec.cuisine || rec.restaurant?.cuisine || ['Various cuisines'];
-                    const rating = rec.rating || rec.restaurant?.rating || 'New';
-                    const deliveryTime = rec.deliveryTime || rec.restaurant?.deliveryTime || '30-45 min';
-                    const priceRange = rec.priceRange || rec.restaurant?.priceRange || 'Moderate';
-                    const matchScore = rec.matchPercentage || Math.round((rec.score || 0.5) * 100);
-                    const explanations = rec.explanations || ['Recommended for you'];
-
-                    return (
-                        <div 
-                            key={restaurantId}
-                            style={{
-                                background: 'rgba(255, 255, 255, 0.95)',
-                                borderRadius: '20px',
-                                padding: '20px',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                position: 'relative',
-                                border: '2px solid rgba(255,255,255,0.2)',
-                                boxShadow: '0 8px 20px rgba(0,0,0,0.1)',
-                                minHeight: '250px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'space-between',
-                                transform: 'translateY(0)',
-                                animationDelay: `${index * 0.1}s`
-                            }}
-                            onClick={() => {
-                                console.log('🏪 Restaurant selected:', restaurantName);
-                                try {
-                                    let restaurant = restaurants.find(r => r._id === restaurantId);
-                                    if (!restaurant) {
-                                        restaurant = {
-                                            _id: restaurantId,
-                                            name: restaurantName,
-                                            cuisine: Array.isArray(cuisine) ? cuisine : [cuisine],
-                                            rating: rating,
-                                            priceRange: priceRange,
-                                            deliveryTime: deliveryTime,
-                                            deliveryFee: rec.deliveryFee || 50,
-                                            minimumOrder: rec.minimumOrder || 200
-                                        };
-                                    }
-                                    selectRestaurant(restaurant);
-                                } catch (error) {
-                                    console.error('❌ Error selecting restaurant:', error);
-                                }
-                            }}
-                            onMouseEnter={(e) => {
-                                e.target.style.transform = 'translateY(-5px) scale(1.02)';
-                                e.target.style.boxShadow = '0 15px 30px rgba(0,0,0,0.2)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.transform = 'translateY(0) scale(1)';
-                                e.target.style.boxShadow = '0 8px 20px rgba(0,0,0,0.1)';
-                            }}
-                        >
-                            {/* Rank Badge */}
-                            <div style={{
-                                position: 'absolute',
-                                top: '-8px',
-                                right: '-8px',
-                                background: 'linear-gradient(45deg, #ff6b6b, #feca57)',
-                                color: 'white',
-                                width: '30px',
-                                height: '30px',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 'bold',
-                                fontSize: '0.8rem',
-                                zIndex: 10
-                            }}>
-                                #{index + 1}
-                            </div>
-                            
-                            {/* Favorite Heart */}
-                            <button 
-                                style={{
-                                    position: 'absolute',
-                                    top: '12px',
-                                    left: '12px',
-                                    background: 'rgba(255,255,255,0.9)',
-                                    border: 'none',
-                                    borderRadius: '50%',
-                                    width: '35px',
-                                    height: '35px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '16px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    zIndex: 10
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    try {
-                                        toggleFavorite(restaurantId);
-                                    } catch (error) {
-                                        console.error('❌ Error toggling favorite:', error);
-                                    }
-                                }}
-                            >
-                                {getUserData(currentUser.id).favorites.includes(restaurantId) ? '❤️' : '🤍'}
-                            </button>
-
-                            {/* Restaurant Info */}
-                            <div style={{ marginTop: '25px', marginBottom: '15px' }}>
-                                <h4 style={{ 
-                                    color: '#2c3e50', 
-                                    margin: '0 0 8px 0',
-                                    fontSize: '1.2rem',
-                                    fontWeight: '700'
-                                }}>
-                                    {restaurantName}
-                                    {index === 0 && <span style={{ marginLeft: '8px' }}>👑</span>}
-                                </h4>
-                                <p style={{ 
-                                    color: '#7f8c8d', 
-                                    margin: '0 0 12px 0',
-                                    fontSize: '0.9rem',
-                                    fontStyle: 'italic'
-                                }}>
-                                    {Array.isArray(cuisine) ? cuisine.join(', ') : cuisine}
-                                </p>
-                            </div>
-                            
-                            {/* Match Score */}
-                            <div style={{ margin: '15px 0' }}>
-                                <div style={{ 
-                                    color: getMatchScoreColor(matchScore),
-                                    fontWeight: '700',
-                                    marginBottom: '8px',
-                                    fontSize: '1.1rem'
-                                }}>
-                                     {matchScore}% Match
-                                </div>
-                                <div style={{
-                                    height: '6px',
-                                    background: 'rgba(0,0,0,0.1)',
-                                    borderRadius: '10px',
-                                    overflow: 'hidden'
-                                }}>
-                                    <div style={{
-                                        height: '100%',
-                                        width: `${matchScore}%`,
-                                        background: `linear-gradient(90deg, ${getMatchScoreColor(matchScore)}, ${getMatchScoreColor(matchScore)}dd)`,
-                                        borderRadius: '10px',
-                                        transition: 'width 1.5s ease-out'
-                                    }}></div>
-                                </div>
-                            </div>
-                            
-                            {/* Explanations */}
-                            <div style={{ 
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '6px',
-                                margin: '15px 0'
-                            }}>
-                                {Array.isArray(explanations) ? 
-                                    explanations.slice(0, 2).map((explanation, idx) => (
-                                        <span key={idx} style={{
-                                            background: 'linear-gradient(45deg, #3498db, #2980b9)',
-                                            color: 'white',
-                                            padding: '4px 8px',
-                                            borderRadius: '12px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: '500'
-                                        }}>
-                                            {formatExplanation(explanation)}
-                                        </span>
-                                    )) :
-                                    <span style={{
-                                        background: 'linear-gradient(45deg, #3498db, #2980b9)',
-                                        color: 'white',
-                                        padding: '4px 8px',
-                                        borderRadius: '12px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '500'
-                                    }}>
-                                        {formatExplanation('Recommended for you')}
-                                    </span>
-                                }
-                            </div>
-                            
-                            {/* Restaurant Details */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginTop: 'auto',
-                                paddingTop: '15px',
-                                borderTop: '1px solid rgba(0,0,0,0.1)',
-                                fontSize: '0.85rem',
-                                color: '#34495e'
-                            }}>
-                                <span> {rating}</span>
-                                <span>🚚 {deliveryTime}</span>
-                                <span style={{
-                                    background: '#27ae60',
-                                    color: 'white',
-                                    padding: '2px 8px',
-                                    borderRadius: '10px',
-                                    fontSize: '0.75rem'
-                                }}>
-                                    {getPriceRangeDisplay ? getPriceRangeDisplay(priceRange) : priceRange}
-                                </span>
-                            </div>
-                        </div>
-                    );
-                }).filter(Boolean)}
-            </div>
-            
-            {/* Action Buttons */}
-            <div style={{ 
-                display: 'flex', 
-                gap: '15px', 
-                justifyContent: 'center',
-                marginBottom: '20px',
-                flexWrap: 'wrap'
-            }}>
-                <button 
-                    style={{
-                        background: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: '2px solid rgba(255,255,255,0.4)',
-                        padding: '12px 24px',
-                        borderRadius: '25px',
-                        cursor: 'pointer',
-                        fontWeight: '600',
-                        transition: 'all 0.3s ease'
-                    }}
-                    onClick={() => {
-                        console.log('🔄 Refreshing recommendations...');
-                        fetchEnhancedRecommendations(currentUser.id);
-                    }}
-                    disabled={loadingEnhancedRecs}
-                    onMouseEnter={(e) => {
-                        if (!loadingEnhancedRecs) {
-                            e.target.style.background = 'rgba(255,255,255,0.3)';
-                            e.target.style.transform = 'translateY(-2px)';
-                        }
-                    }}
-                    onMouseLeave={(e) => {
-                        e.target.style.background = 'rgba(255,255,255,0.2)';
-                        e.target.style.transform = 'translateY(0)';
-                    }}
-                >
-                    {loadingEnhancedRecs ? '🔄 Updating...' : '🔄 Refresh Recommendations'}
-                </button>
-                
-                <button 
-                    style={{
-                        background: 'transparent',
-                        color: 'white',
-                        border: '2px solid rgba(255,255,255,0.4)',
-                        padding: '12px 24px',
-                        borderRadius: '25px',
-                        cursor: 'pointer',
-                        fontWeight: '600',
-                        transition: 'all 0.3s ease'
-                    }}
-                    onClick={() => {
-                        console.log('🏪 Showing all restaurants...');
-                        const regularSection = document.querySelector('.regular-restaurants');
-                        if (regularSection) {
-                            regularSection.scrollIntoView({ behavior: 'smooth' });
-                        }
-                    }}
-                    onMouseEnter={(e) => {
-                        e.target.style.background = 'rgba(255,255,255,0.1)';
-                        e.target.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.target.style.background = 'transparent';
-                        e.target.style.transform = 'translateY(0)';
-                    }}
-                >
-                    🏪 Browse All Restaurants
-                </button>
-            </div>
-
-            {/* Insights */}
-            <div style={{
-                background: 'rgba(255,255,255,0.1)',
-                borderRadius: '15px',
-                padding: '20px',
-                backdropFilter: 'blur(10px)'
-            }}>
-                <h4 style={{ textAlign: 'center', marginBottom: '15px' }}> Why These Recommendations?</h4>
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '15px'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.5rem' }}></span>
-                        <span>Matched to your taste preferences</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.5rem' }}></span>
-                        <span>Highly rated by similar users</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.5rem' }}></span>
-                        <span>Perfect for your dining times</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 
     const completeOnboarding = (finalPreferences = userPreferences) => {
   if (!isOnboardingActive) {
@@ -2341,392 +1919,6 @@ const handleEnhancedQuickReply = async (reply) => {
 }
 };
 
-// Enhanced message renderer
-const renderEnhancedChatMessage = (msg, index) => {
-  return (
-    <div key={index} className="message-container">
-      <div className={`message ${msg.role}`}>
-        <div className="message-content">
-          {msg.content}
-        </div>
-        <div className="message-time">{msg.timestamp}</div>
-      </div>
-
-      {/* Enhanced Recommendations Display */}
-      {msg.type === 'enhanced_recommendations' && msg.recommendations && (
-        <div className="chat-enhanced-recommendations" style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          borderRadius: '15px',
-          padding: '20px',
-          margin: '10px 0',
-          color: 'white'
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-            <h4 style={{ margin: '0 0 5px 0', fontSize: '1.2rem' }}> Perfect Matches For You</h4>
-            <p style={{ margin: 0, opacity: 0.9, fontSize: '0.9rem' }}>
-              Based on your preferences and history
-            </p>
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {msg.recommendations.map((rec, idx) => (
-              <div 
-                key={rec.id || idx} 
-                style={{
-                  background: 'rgba(255, 255, 255, 0.15)',
-                  backdropFilter: 'blur(10px)',
-                  borderRadius: '12px',
-                  padding: '15px',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  position: 'relative'
-                }}
-                onClick={() => {
-                  // Find or create restaurant object
-                  let restaurant = restaurants.find(r => r._id === rec.id);
-                  if (!restaurant) {
-                    restaurant = {
-                      _id: rec.id,
-                      name: rec.name,
-                      cuisine: rec.cuisine,
-                      rating: rec.rating,
-                      priceRange: rec.priceRange,
-                      deliveryTime: rec.deliveryTime,
-                      deliveryFee: rec.deliveryFee || 50,
-                      minimumOrder: rec.minimumOrder || 200
-                    };
-                  }
-                  
-                  // Close chat and select restaurant
-                  setShowChat(false);
-                  selectRestaurant(restaurant);
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.25)';
-                  e.target.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.15)';
-                  e.target.style.transform = 'translateY(0)';
-                }}
-              >
-                {/* Rank badge */}
-                <div style={{
-                  position: 'absolute',
-                  top: '-5px',
-                  right: '-5px',
-                  background: 'linear-gradient(45deg, #ff6b6b, #feca57)',
-                  color: 'white',
-                  width: '25px',
-                  height: '25px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.8rem',
-                  fontWeight: 'bold'
-                }}>
-                  #{idx + 1}
-                </div>
-                
-                <div style={{ marginBottom: '8px' }}>
-                  <h5 style={{ 
-                    margin: '0 0 4px 0',
-                    fontSize: '1.1rem',
-                    fontWeight: '600'
-                  }}>
-                    {rec.name}
-                  </h5>
-                  <p style={{
-                    margin: '0 0 8px 0',
-                    fontSize: '0.85rem',
-                    opacity: '0.9'
-                  }}>
-                    {Array.isArray(rec.cuisine) ? rec.cuisine.join(', ') : rec.cuisine}
-                  </p>
-                </div>
-                
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '8px'
-                }}>
-                  <div style={{
-                    background: 'rgba(46, 204, 113, 0.8)',
-                    color: 'white',
-                    padding: '4px 10px',
-                    borderRadius: '15px',
-                    fontSize: '0.8rem',
-                    fontWeight: '600'
-                  }}>
-                    {rec.matchPercentage}% Match
-                  </div>
-                  <span style={{ fontSize: '0.9rem' }}>⭐ {rec.rating}</span>
-                </div>
-                
-                {rec.explanations && rec.explanations.length > 0 && (
-                  <div style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    padding: '6px 10px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontStyle: 'italic'
-                  }}>
-                    💡 {rec.explanations[0]}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          
-          <button 
-            onClick={() => {
-              setShowChat(false);
-              setTimeout(() => {
-                const recSection = document.querySelector('.personalized-preview-section');
-                if (recSection) {
-                  recSection.scrollIntoView({ behavior: 'smooth' });
-                }
-              }, 100);
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              color: 'white',
-              border: '2px solid rgba(255,255,255,0.4)',
-              padding: '10px 20px',
-              borderRadius: '25px',
-              cursor: 'pointer',
-              width: '100%',
-              marginTop: '15px',
-              fontWeight: '600',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(255,255,255,0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'rgba(255,255,255,0.2)';
-            }}
-          >
-            🏪 View All Recommendations
-          </button>
-        </div>
-      )}
-
-      {/* Quick Replies */}
-      {msg.suggestions && (
-        <div className="quick-replies" style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '6px',
-          marginTop: '12px'
-        }}>
-          {msg.suggestions.map((suggestion, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleEnhancedQuickReply(suggestion)}
-              style={{
-                background: 'rgba(102, 126, 234, 0.1)',
-                border: '1px solid rgba(102, 126, 234, 0.3)',
-                color: '#667eea',
-                padding: '6px 12px',
-                borderRadius: '15px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: '500',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = '#667eea';
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = 'rgba(102, 126, 234, 0.1)';
-                e.target.style.color = '#667eea';
-              }}
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Restaurant Cards */}
-      {msg.restaurants && msg.restaurants.length > 0 && (
-        <div style={{ margin: '12px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {msg.restaurants.map((restaurant, idx) => (
-            <div 
-              key={idx} 
-              style={{
-                background: 'white',
-                border: '2px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '12px',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
-              onClick={() => {
-                setShowChat(false);
-                selectRestaurant(restaurant);
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = '#667eea';
-                e.target.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = '#e5e7eb';
-                e.target.style.transform = 'translateY(0)';
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <h4 style={{ margin: 0, color: '#2c3e50', fontSize: '1rem' }}>{restaurant.name}</h4>
-                <span style={{ color: '#f39c12', fontSize: '0.9rem' }}>⭐ {restaurant.rating || 'New'}</span>
-              </div>
-              <p style={{ margin: 0, color: '#7f8c8d', fontSize: '0.85rem' }}>
-                {restaurant.cuisine ? restaurant.cuisine.join(', ') : 'Various cuisines'}
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.8rem', color: '#6c757d' }}>
-                <span>🚚 {restaurant.deliveryTime}</span>
-                <span>{getPriceRangeDisplay(restaurant.priceRange)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Order History */}
-      {msg.orderHistory && (
-        <div style={{ margin: '12px 0', maxHeight: '200px', overflowY: 'auto' }}>
-          {msg.orderHistory.map((order, idx) => (
-            <div key={idx} style={{
-              background: 'white',
-              padding: '10px',
-              marginBottom: '8px',
-              borderRadius: '8px',
-              border: '1px solid #e5e7eb'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <strong style={{ color: '#2c3e50', fontSize: '0.9rem' }}>{order.restaurantName}</strong>
-                <span style={{ color: '#27ae60', fontSize: '0.85rem' }}>Rs. {order.total}</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.8rem', color: '#6c757d' }}>
-                {order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.75rem' }}>
-                <span style={{ color: '#7f8c8d' }}>{new Date(order.date).toLocaleDateString()}</span>
-                <span style={{ color: order.status === 'delivered' ? '#27ae60' : '#3498db' }}>
-                  {order.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Cart Items */}
-      {msg.cartItems && msg.cartItems.length > 0 && (
-        <div style={{
-          background: 'linear-gradient(135deg, #fff3e0, #ffeaa7)',
-          borderRadius: '12px',
-          padding: '12px',
-          margin: '10px 0'
-        }}>
-          <h4 style={{ margin: '0 0 8px 0', color: '#e67e22' }}>🛒 Your Cart</h4>
-          {msg.cartItems.map((item, idx) => (
-            <div key={idx} style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-              {item.menuItem.name} x{item.quantity} - Rs. {item.price * item.quantity}
-            </div>
-          ))}
-          {msg.cartTotal && (
-            <div style={{ fontWeight: 'bold', marginTop: '8px', color: '#e67e22' }}>
-              Total: Rs. {msg.cartTotal}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      {msg.actions && (
-        <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-          {msg.actions.map((action, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                if (action === 'Checkout now') {
-                  setShowCheckout(true);
-                  setShowChat(false);
-                } else {
-                  handleEnhancedQuickReply(action);
-                }
-              }}
-              style={{
-                background: '#667eea',
-                color: 'white',
-                border: 'none',
-                padding: '6px 12px',
-                borderRadius: '15px',
-                fontSize: '0.8rem',
-                cursor: 'pointer'
-              }}
-            >
-              {action}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Onboarding Options */}
-      {msg.questionData && msg.isOnboarding && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-          gap: '8px',
-          marginTop: '12px'
-        }}>
-          <p style={{
-            gridColumn: '1 / -1',
-            marginBottom: '10px',
-            fontWeight: 'bold',
-            color: '#667eea',
-            textAlign: 'center'
-          }}>
-            Please select an option:
-          </p>
-          {msg.questionData.options.map((option, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleOptionSelect(option, msg.questionData.key)}
-              style={{
-                background: 'white',
-                border: '2px solid #667eea',
-                color: '#667eea',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-                fontWeight: '500',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = '#667eea';
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = 'white';
-                e.target.style.color = '#667eea';
-              }}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // Enhanced Popular Restaurants function
 const getPopularRestaurants = () => {
   return restaurants
@@ -3067,7 +2259,7 @@ const syncUserActionWithDataManager = (action, data) => {
       <div className="App">
         {/* Header */}
         <header className="header">
-          <h1>🍕 Pakistani Food Delivery</h1>
+          <h1>🍕 VOICE GUIDE</h1>
           <div className="header-buttons">
             {currentUser ? (
               <div className="user-menu">
@@ -3096,19 +2288,26 @@ const syncUserActionWithDataManager = (action, data) => {
             )}
             <button 
     onClick={() => {
-      const wasShowingChat = showChat;
-      setShowChat(!showChat);
-      
-      // Only start onboarding if chat is being opened and user is new
-      if (!wasShowingChat && isNewUser && currentUser && !isOnboardingActive) {
-        setTimeout(() => {
-          startOnboarding();
-        }, 500);
-      }
-    }} 
-    className="chat-toggle"
-  >
-    💬 Smart Assistant {isNewUser && <span className="notification-dot"></span>}
+    console.log('🎯 Chat button clicked', { 
+      isNewUser, 
+      currentUser: currentUser?.name,
+      isOnboardingActive 
+    });
+    
+    const wasShowingChat = showChat;
+    setShowChat(!showChat);
+    
+    // AUTO-START ONBOARDING for new users when chat opens
+    if (!wasShowingChat && isNewUser && currentUser && !isOnboardingActive) {
+      console.log('🚀 Auto-starting onboarding for new user...');
+      setTimeout(() => {
+        startOnboarding();
+      }, 500);
+    }
+  }} 
+  className="chat-toggle"
+>
+  💬 Smart Assistant {isNewUser && <span className="notification-dot"></span>}
   </button>
             <div className="cart-info">
               🛒 Cart ({cart.length})
@@ -3169,19 +2368,6 @@ const syncUserActionWithDataManager = (action, data) => {
               <div className="content">
                 {!selectedRestaurant ? (
   <div className="restaurants-section">
-    
-    {/* Show Personalized Recommendations Preview for logged-in users */}
-    {currentUser && !currentUser.isAdmin && (
-                      <div className="personalized-preview-section">
-                        <div className="preview-header">
-                          <h2> Suggestions Just For You</h2>
-                          <p>Discover restaurants</p>
-                        </div>
-                        
-                        {/* REPLACE the complex EnhancedRecommendationsSection with our test component */}
-                        <FixedEnhancedRecommendations />
-                      </div>
-                    )}
     
     {/* Regular Restaurants Section */}
   <div className="regular-restaurants">
@@ -3374,26 +2560,49 @@ const syncUserActionWithDataManager = (action, data) => {
               </div>
 
               <div className="chat-messages">
-                {messages.length === 0 && !isNewUser && (
-                  <div className="chat-welcome-container">
-                    <div className="ai-avatar">🍕</div>
-                    <p className="chat-welcome">Hi! I'm your AI food assistant. I can help you:</p>
-                    <div className="welcome-features">
-                      <div className="feature"> Get personalized recommendations</div>
-                      <div className="feature">🍔 Find restaurants by cuisine</div>
-                      <div className="feature">💰 Filter by budget</div>
-                      <div className="feature">🌶️ Match spice preferences</div>
-                    </div>
-                    {currentUser && Object.keys(getUserData(currentUser.id).preferences).length === 0 && (
-                      <button 
-                        className="setup-preferences-btn"
-                        onClick={startOnboarding}
-                      >
-                         Set Up My Preferences
-                      </button>
-                    )}
-                  </div>
-                )}
+                {messages.length === 0 && (
+  <div className="chat-welcome-container">
+    <div className="ai-avatar">🤖</div>
+    <p className="chat-welcome">Welcome! Let's set up your preferences.</p>
+    
+    {/* SIMPLE START BUTTON */}
+    <button 
+      onClick={() => {
+        console.log('🚀 Starting questions...');
+        
+        // Add welcome message
+        const welcome = {
+          role: 'bot',
+          content: `Hi ${currentUser?.name}! Let's set up your food preferences.`,
+          timestamp: new Date().toLocaleTimeString()
+        };
+        
+        setMessages([welcome]);
+        
+        // Add first question after 1 second
+        setTimeout(() => {
+          const question = {
+            role: 'bot',
+            content: "What's your favorite type of cuisine?",
+            questionData: {
+              id: 1,
+              question: "What's your favorite type of cuisine?",
+              options: ["Pakistani", "Chinese", "Fast Food", "Italian", "BBQ"],
+              key: "cuisine"
+            },
+            timestamp: new Date().toLocaleTimeString()
+          };
+          
+          setMessages(prev => [...prev, question]);
+          setIsOnboardingActive(true);
+        }, 1000);
+      }}
+      className="setup-preferences-btn"
+    >
+      🚀 Start Setup
+    </button>
+  </div>
+)}
 
                   {/* Update your chat messages JSX section to handle new response types */}
   {/* Find your messages.map() in the chat and update it: */}
@@ -3406,6 +2615,7 @@ const syncUserActionWithDataManager = (action, data) => {
       </div>
       <div className="message-time">{msg.timestamp}</div>
     </div>
+    
 
     {/* Quick Replies */}
     {msg.quickReplies && (
@@ -3419,6 +2629,37 @@ const syncUserActionWithDataManager = (action, data) => {
             {reply}
           </button>
         ))}
+      </div>
+    )}
+
+    {/* ADD THIS NEW SECTION RIGHT HERE */}
+    {msg.questionData && (
+      <div style={{margin: '15px 0'}}>
+        <p style={{textAlign: 'center', fontWeight: 'bold', color: '#667eea', marginBottom: '10px'}}>
+          Choose an option:
+        </p>
+        <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center'}}>
+          {msg.questionData.options.map((option, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                console.log('Selected:', option);
+                handleOptionSelect(option, msg.questionData.key);
+              }}
+              style={{
+                background: '#667eea',
+                color: 'white',
+                border: 'none',
+                padding: '10px 15px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
       </div>
     )}
 {msg.type === 'enhanced_recommendations' && msg.recommendations && (
@@ -3816,45 +3057,45 @@ const syncUserActionWithDataManager = (action, data) => {
                 </div>
 
                 <div className="chat-input-section">
-                {!isOnboardingActive && ( // Simplified condition - only check onboarding active
-                  <div className="suggestions">
-                    <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
-                       Recommendations
-                    </button>
-                    <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
-                       Popular
-                    </button>
-                    <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
-                       My Orders
-                    </button>
-                    <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
-                       Favorites
-                    </button>
-                  </div>
-                )}
-                
-                <div className="chat-input">
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !isOnboardingActive && sendMessage()}
-                    placeholder={
-                      isOnboardingActive 
-                        ? "Please select an option above..." 
-                        : "Ask me anything about food..."
-                    }
-                    disabled={isOnboardingActive} // Only disable during onboarding
-                  />
-                  <button 
-                    onClick={sendMessage} 
-                    disabled={isOnboardingActive || !inputMessage.trim()} // Only disable during onboarding
-                    className="send-button"
-                  >
-                    <span>🚀</span>
-                  </button>
-                </div>
-              </div>
+  {!isOnboardingActive && ( // Only show suggestions when NOT onboarding
+    <div className="suggestions">
+      <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
+        🎯 Recommendations
+      </button>
+      <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
+        🔥 Popular
+      </button>
+      <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
+        📋 My Orders
+      </button>
+      <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
+        ❤️ Favorites
+      </button>
+    </div>
+  )}
+  
+  <div className="chat-input">
+    <input
+      type="text"
+      value={inputMessage}
+      onChange={(e) => setInputMessage(e.target.value)}
+      onKeyPress={(e) => e.key === 'Enter' && !isOnboardingActive && sendMessage()}
+      placeholder={
+        isOnboardingActive 
+          ? "Please select an option above..." 
+          : "Ask me anything about food..."
+      }
+      disabled={isOnboardingActive} // KEEP input disabled during onboarding
+    />
+    <button 
+      onClick={sendMessage} 
+      disabled={isOnboardingActive || !inputMessage.trim()} 
+      className="send-button"
+    >
+      <span>🚀</span>
+    </button>
+  </div>
+</div>
               </div>
             )}
 {/* Personalized Recommendations Full Page */}
