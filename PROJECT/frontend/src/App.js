@@ -1279,7 +1279,7 @@ const handleOptionSelect = (option, questionKey) => {
 
                     {/* Insights Panel */}
                     <div className="recommendation-insights">
-                        <h4>💡 Why These Recommendations?</h4>
+                        <h4> Why These Recommendations?</h4>
                         <div className="insights-grid">
                             <div className="insight">
                                 <span className="insight-icon"></span>
@@ -1691,7 +1691,7 @@ const FixedEnhancedRecommendations = () => {
                                 fontSize: '0.85rem',
                                 color: '#34495e'
                             }}>
-                                <span>⭐ {rating}</span>
+                                <span> {rating}</span>
                                 <span>🚚 {deliveryTime}</span>
                                 <span style={{
                                     background: '#27ae60',
@@ -1784,7 +1784,7 @@ const FixedEnhancedRecommendations = () => {
                 padding: '20px',
                 backdropFilter: 'blur(10px)'
             }}>
-                <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>💡 Why These Recommendations?</h4>
+                <h4 style={{ textAlign: 'center', marginBottom: '15px' }}> Why These Recommendations?</h4>
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -1795,11 +1795,11 @@ const FixedEnhancedRecommendations = () => {
                         <span>Matched to your taste preferences</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.5rem' }}>⭐</span>
+                        <span style={{ fontSize: '1.5rem' }}></span>
                         <span>Highly rated by similar users</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.5rem' }}>🕒</span>
+                        <span style={{ fontSize: '1.5rem' }}></span>
                         <span>Perfect for your dining times</span>
                     </div>
                 </div>
