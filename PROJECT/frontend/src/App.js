@@ -5,6 +5,8 @@
   import RestaurantManagement from './components/admin/RestaurantManagement';
   import UserAnalytics from './components/admin/UserAnalytics';
   import dataManager from './components/shared/DataManager';
+  import VoiceInput from './components/shared/VoiceInput';
+  import VoiceOrderService from './services/voiceOrderService';
   import './App.css';
 
   // ===== 1. ONBOARDING QUESTIONS =====
@@ -287,6 +289,10 @@
   function App() {
      console.log('🚀 App function called - starting render');
     // ===== ALL STATE VARIABLES =====
+    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+    const [voiceOrderService] = useState(new VoiceOrderService());
+    const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+    const [voiceResponse, setVoiceResponse] = useState(null);
     const [restaurants, setRestaurants] = useState([]);
     const [selectedRestaurant, setSelectedRestaurant] = useState(null);
     const [menu, setMenu] = useState([]);
@@ -358,6 +364,462 @@
     const [selectedOrderForRating, setSelectedOrderForRating] = useState(null);
     const [currentRating, setCurrentRating] = useState(0);
     const [currentFeedback, setCurrentFeedback] = useState('');
+
+
+    // Handle voice input result
+const handleVoiceResult = async (transcript) => {
+  console.log('🎤 Voice input received:', transcript);
+  setIsProcessingVoice(true);
+  
+  try {
+    // Process voice command locally
+    const processed = voiceOrderService.processVoiceCommand(transcript, {
+      selectedRestaurant,
+      cartItems: cart,
+      currentUser
+    });
+    
+    console.log('🧠 Processed voice command:', processed);
+    
+    // Execute actions based on voice command
+    await executeVoiceActions(processed.actions, processed);
+    
+    // Add voice message to chat
+    const userMsg = {
+      role: 'user',
+      content: `🎤 ${transcript}`,
+      isVoiceInput: true,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    setMessages(prev => [...prev, userMsg]);
+    
+    // Show AI response
+    const botResponse = {
+      role: 'bot',
+      content: processed.response,
+      timestamp: new Date().toLocaleTimeString(),
+      voiceProcessed: true,
+      confidence: processed.confidence,
+      detectedIntent: processed.intent,
+      // Add data for rendering
+      restaurants: processed.actions?.some(a => a.type === 'SEARCH_RESTAURANTS') 
+        ? restaurants.filter(r => r.cuisine?.some(c => 
+            processed.entities?.foods?.some(f => 
+              c.toLowerCase().includes(f.name.toLowerCase())
+            )
+          )).slice(0, 4)
+        : [],
+      suggestions: ['Order from these', 'Show more', 'Different cuisine']
+    };
+    
+    setMessages(prev => [...prev, botResponse]);
+    
+    // If chat is not open, show voice response
+    if (!showChat) {
+      setVoiceResponse({
+        message: processed.response,
+        actions: processed.actions,
+        timestamp: new Date()
+      });
+      
+      setTimeout(() => setVoiceResponse(null), 5000);
+    }
+    
+  } catch (error) {
+    console.error('❌ Voice processing error:', error);
+    
+    // Fallback: send to regular chat system
+    setInputMessage(transcript);
+    if (showChat) {
+      sendMessage();
+    }
+  } finally {
+    setIsProcessingVoice(false);
+  }
+};
+
+// Handle voice reorder
+const handleVoiceReorder = async () => {
+  if (!currentUser) {
+    const loginMessage = {
+      role: 'bot',
+      content: 'Please login first to see your previous orders:',
+      suggestions: ['Login', 'Create account', 'Browse restaurants'],
+      timestamp: new Date().toLocaleTimeString()
+    };
+    setMessages(prev => [...prev, loginMessage]);
+    setShowAuth(true);
+    return;
+  }
+
+  const userData = getUserData(currentUser.id);
+  
+  if (userData.orderHistory && userData.orderHistory.length > 0) {
+    const recentOrders = userData.orderHistory.slice(0, 3);
+    
+    const reorderMessage = {
+      role: 'bot',
+      content: `🔄 Here are your recent orders. Which one would you like to reorder?`,
+      orderHistory: recentOrders,
+      suggestions: ['Reorder this', 'Show more orders', 'New order instead'],
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    setMessages(prev => [...prev, reorderMessage]);
+  } else {
+    const noOrdersMessage = {
+      role: 'bot',
+      content: 'You haven\'t placed any orders yet. Let me show you some great restaurants:',
+      restaurants: restaurants.slice(0, 4),
+      suggestions: ['Order from these', 'Show recommendations', 'Popular restaurants'],
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    setMessages(prev => [...prev, noOrdersMessage]);
+  }
+};
+// Execute actions based on voice commands
+const executeVoiceActions = async (actions, processed) => {
+  if (!actions || actions.length === 0) return;
+  
+  for (const action of actions) {
+    console.log('🎯 Executing voice action:', action.type);
+    
+    switch (action.type) {
+      case 'SEARCH_RESTAURANTS':
+        await handleVoiceSearchRestaurants(action.payload);
+        break;
+
+      case 'SEARCH_RESTAURANTS_BY_CUISINE':
+        await handleVoiceSearchByCuisine(action.payload);
+        break;
+        
+      case 'ADD_TO_CART':
+        await handleVoiceAddToCart(action.payload);
+        break;
+        
+      case 'SHOW_CART':
+        const cartSection = document.querySelector('.cart-section');
+        if (cartSection) {
+          cartSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        break;
+        
+      case 'PLACE_ORDER':
+        if (cart.length > 0) {
+          setShowCheckout(true);
+        } else {
+          const emptyCartMessage = {
+            role: 'bot',
+            content: 'Your cart is empty. Let me show you some restaurants to order from:',
+            restaurants: restaurants.slice(0, 4),
+            suggestions: ['Order from these', 'Show recommendations', 'Popular items'],
+            timestamp: new Date().toLocaleTimeString()
+          };
+          setMessages(prev => [...prev, emptyCartMessage]);
+        }
+        break;
+        
+      case 'SHOW_RECOMMENDATIONS':
+        await handleVoiceShowRecommendations();
+        break;
+
+      case 'SHOW_POPULAR':
+        await handleVoiceShowPopular();
+        break;
+
+      case 'SHOW_ORDER_HISTORY_FOR_REORDER':
+        await handleVoiceReorder();
+        break;
+        
+      case 'SHOW_ORDER_HISTORY':
+        if (currentUser) {
+          setShowUserProfile(true);
+        } else {
+          const loginMessage = {
+            role: 'bot',
+            content: 'Please login first to see your order history:',
+            suggestions: ['Login', 'Create account', 'Browse as guest'],
+            timestamp: new Date().toLocaleTimeString()
+          };
+          setMessages(prev => [...prev, loginMessage]);
+          setShowAuth(true);
+        }
+        break;
+        
+      default:
+        console.log('Unknown voice action:', action.type);
+        break;
+    }
+  }
+};
+// Handle voice search by cuisine
+const handleVoiceSearchByCuisine = async (payload) => {
+  console.log('🍽️ Voice cuisine search:', payload);
+  
+  const { cuisine } = payload;
+  
+  if (cuisine && cuisine.length > 0) {
+    const requestedCuisine = cuisine[0].toLowerCase();
+    
+    const filteredRestaurants = restaurants.filter(restaurant => {
+      if (!restaurant.cuisine) return false;
+      
+      return restaurant.cuisine.some(c => {
+        const cuisineLower = c.toLowerCase();
+        
+        // Enhanced cuisine matching
+        if (requestedCuisine === 'italian') {
+          return cuisineLower.includes('italian') || cuisineLower.includes('pizza');
+        }
+        if (requestedCuisine === 'chinese') {
+          return cuisineLower.includes('chinese') || cuisineLower.includes('asian');
+        }
+        if (requestedCuisine === 'pakistani') {
+          return cuisineLower.includes('pakistani') || cuisineLower.includes('desi') || cuisineLower.includes('traditional');
+        }
+        if (requestedCuisine === 'fast food') {
+          return cuisineLower.includes('fast') || cuisineLower.includes('burger') || cuisineLower.includes('pizza');
+        }
+        if (requestedCuisine === 'bbq') {
+          return cuisineLower.includes('bbq') || cuisineLower.includes('barbecue') || cuisineLower.includes('grilled');
+        }
+        
+        return cuisineLower.includes(requestedCuisine) || requestedCuisine.includes(cuisineLower);
+      });
+    });
+    
+    console.log('🏪 Found cuisine restaurants:', filteredRestaurants.length);
+    
+    const cuisineMessage = {
+      role: 'bot',
+      content: `🍽️ Found ${filteredRestaurants.length} ${requestedCuisine} restaurants:`,
+      restaurants: filteredRestaurants.slice(0, 6),
+      suggestions: ['Order from these', 'Show more', 'Different cuisine', 'Popular items'],
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    setMessages(prev => [...prev, cuisineMessage]);
+    
+    if (filteredRestaurants.length === 0) {
+      const fallbackMessage = {
+        role: 'bot',
+        content: `Sorry, no ${requestedCuisine} restaurants found. Here are popular options:`,
+        restaurants: restaurants.slice(0, 4),
+        suggestions: ['Try these instead', 'Show all restaurants', 'Different cuisine'],
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setMessages(prev => [...prev, fallbackMessage]);
+    }
+  }
+};
+
+
+
+// Handle voice restaurant search
+const handleVoiceSearchRestaurants = async (payload) => {
+  console.log('🔍 Voice restaurant search:', payload);
+  
+  const { cuisine, restaurant } = payload;
+  
+  if (restaurant) {
+    const foundRestaurant = restaurants.find(r => 
+      r.name.toLowerCase().includes(restaurant.toLowerCase())
+    );
+    
+    if (foundRestaurant) {
+      selectRestaurant(foundRestaurant);
+      return;
+    }
+  }
+  
+  if (cuisine && cuisine.length > 0) {
+    const filteredRestaurants = restaurants.filter(restaurant =>
+      restaurant.cuisine && restaurant.cuisine.some(c =>
+        cuisine.some(requestedCuisine =>
+          c.toLowerCase().includes(requestedCuisine.toLowerCase()) ||
+          requestedCuisine.toLowerCase().includes(c.toLowerCase())
+        )
+      )
+    );
+    
+    console.log('🏪 Found restaurants:', filteredRestaurants.length);
+    
+    if (filteredRestaurants.length === 1) {
+      selectRestaurant(filteredRestaurants[0]);
+    } else if (filteredRestaurants.length > 1) {
+      // Show in chat
+      const restaurantMessage = {
+        role: 'bot',
+        content: `Found ${filteredRestaurants.length} restaurants serving ${cuisine.join(', ')}:`,
+        restaurants: filteredRestaurants.slice(0, 4),
+        suggestions: ['Order from these', 'Show more', 'Different cuisine'],
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setMessages(prev => [...prev, restaurantMessage]);
+    } else {
+      const noResultsMessage = {
+        role: 'bot',
+        content: `No restaurants found serving ${cuisine.join(', ')}. Here are popular options:`,
+        restaurants: restaurants.slice(0, 4),
+        suggestions: ['Try these instead', 'Browse all restaurants'],
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setMessages(prev => [...prev, noResultsMessage]);
+    }
+  }
+};
+// Handle voice show recommendations
+const handleVoiceShowRecommendations = async () => {
+  if (!currentUser || currentUser.isAdmin) {
+    const loginMessage = {
+      role: 'bot',
+      content: 'Please login to get personalized recommendations:',
+      suggestions: ['Login', 'Create account', 'Show popular restaurants'],
+      timestamp: new Date().toLocaleTimeString()
+    };
+    setMessages(prev => [...prev, loginMessage]);
+    setShowAuth(true);
+    return;
+  }
+
+  // Show recommendations in chat
+  if (enhancedRecommendations && enhancedRecommendations.length > 0) {
+    const recMessage = {
+      role: 'bot',
+      content: `🎯 Based on your taste profile, here are my top recommendations:`,
+      type: 'enhanced_recommendations',
+      recommendations: enhancedRecommendations.slice(0, 5),
+      timestamp: new Date().toLocaleTimeString()
+    };
+    setMessages(prev => [...prev, recMessage]);
+  } else {
+    // Fetch recommendations
+    try {
+      await fetchEnhancedRecommendations(currentUser.id);
+      
+      // Wait a bit for the state to update, then show them
+      setTimeout(() => {
+        if (enhancedRecommendations && enhancedRecommendations.length > 0) {
+          const recMessage = {
+            role: 'bot',
+            content: `🎯 Here are my personalized recommendations for you:`,
+            type: 'enhanced_recommendations', 
+            recommendations: enhancedRecommendations.slice(0, 5),
+            timestamp: new Date().toLocaleTimeString()
+          };
+          setMessages(prev => [...prev, recMessage]);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+      
+      const errorMessage = {
+        role: 'bot',
+        content: 'Having trouble getting your recommendations. Here are popular restaurants:',
+        restaurants: restaurants.slice(0, 5),
+        suggestions: ['Order from these', 'Try again later', 'Show all restaurants'],
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  }
+};
+
+// Handle voice show popular
+const handleVoiceShowPopular = async () => {
+  // Get popular restaurants (highest rated)
+  const popularRestaurants = restaurants
+    .filter(r => r.rating && r.rating >= 4.0)
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    .slice(0, 6);
+
+  const popularMessage = {
+    role: 'bot',
+    content: `🔥 Here are the most popular restaurants right now:`,
+    restaurants: popularRestaurants,
+    suggestions: ['Order from these', 'Show trending items', 'My recommendations'],
+    timestamp: new Date().toLocaleTimeString()
+  };
+  
+  setMessages(prev => [...prev, popularMessage]);
+};
+// Handle voice add to cart
+const handleVoiceAddToCart = async (payload) => {
+  console.log('🛒 Voice add to cart:', payload);
+  
+  if (!selectedRestaurant) {
+    const selectRestaurantMessage = {
+      role: 'bot',
+      content: 'Please select a restaurant first! Here are some popular options:',
+      restaurants: restaurants.slice(0, 4),
+      suggestions: ['Select restaurant', 'Show all restaurants'],
+      timestamp: new Date().toLocaleTimeString()
+    };
+    setMessages(prev => [...prev, selectRestaurantMessage]);
+    return;
+  }
+  
+  const { items } = payload;
+  
+  for (const voiceItem of items) {
+    const menuItem = menu.find(item =>
+      item.name.toLowerCase().includes(voiceItem.name.toLowerCase()) ||
+      voiceItem.name.toLowerCase().includes(item.name.toLowerCase())
+    );
+    
+    if (menuItem) {
+      console.log('✅ Adding to cart:', menuItem.name);
+      
+      for (let i = 0; i < (voiceItem.quantity || 1); i++) {
+        addToCart(menuItem);
+      }
+      
+      const successMsg = {
+        role: 'bot',
+        content: `✅ Added ${voiceItem.quantity || 1}x ${menuItem.name} to your cart!`,
+        timestamp: new Date().toLocaleTimeString(),
+        suggestions: ['Add more items', 'View cart', 'Checkout now']
+      };
+      
+      setMessages(prev => [...prev, successMsg]);
+    } else {
+      console.log('❌ Menu item not found:', voiceItem.name);
+      
+      const errorMsg = {
+        role: 'bot',
+        content: `❌ Sorry, I couldn't find "${voiceItem.name}" on the menu. Here are available items:`,
+        menuItems: menu.slice(0, 3),
+        timestamp: new Date().toLocaleTimeString(),
+        suggestions: ['Try these items', 'Show full menu', 'Different restaurant']
+      };
+      
+      setMessages(prev => [...prev, errorMsg]);
+    }
+  }
+};
+
+// Voice transcription handlers
+const handleVoiceTranscriptionStart = () => {
+  console.log('🎤 Voice transcription started');
+  setIsProcessingVoice(true);
+};
+
+const handleVoiceTranscriptionEnd = () => {
+  console.log('🛑 Voice transcription ended');
+  setIsProcessingVoice(false);
+};
+
+// Toggle voice functionality
+const toggleVoiceInput = () => {
+  setIsVoiceEnabled(!isVoiceEnabled);
+  if (!isVoiceEnabled) {
+    console.log('🎤 Voice input enabled');
+  } else {
+    console.log('🔇 Voice input disabled');
+  }
+};
 
     // Function to fetch surge status
     const fetchSurgeStatus = async () => {
@@ -536,9 +998,39 @@ useEffect(() => {
   // If it's a new user and chat is open but onboarding hasn't started
   if (isNewUser && showChat && currentUser && !isOnboardingActive && messages.length === 0) {
     console.log('🚀 Auto-starting onboarding from useEffect...');
-    setTimeout(() => {
-      startOnboarding();
+    const timeoutId = setTimeout(() => {
+      setIsOnboardingActive(true);
+      setCurrentOnboardingStep(0);
+      setUserPreferences({});
+      
+      const welcomeMessage = {
+        role: 'bot',
+        content: `Welcome to Pakistani Food Delivery, ${currentUser?.name || 'there'}! 🎉\n\nI'm your AI food assistant and I'll help you discover the perfect meals based on your preferences. Let's get to know your taste!`,
+        isOnboarding: true,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      setMessages([welcomeMessage]);
+      
+      setTimeout(() => {
+        if (isOnboardingActive && currentUser) {
+          console.log('📝 Showing first onboarding question...');
+          const firstQuestion = onboardingQuestions[0];
+          
+          const questionMessage = {
+            role: 'bot',
+            content: firstQuestion.question,
+            isOnboarding: true,
+            questionData: firstQuestion,
+            timestamp: new Date().toLocaleTimeString()
+          };
+          
+          setMessages(prev => [...prev, questionMessage]);
+        }
+      }, 2000);
     }, 1000);
+    
+    return () => clearTimeout(timeoutId);
   }
 }, [isNewUser, showChat, currentUser, isOnboardingActive, messages.length]);
 
@@ -3056,8 +3548,9 @@ const syncUserActionWithDataManager = (action, data) => {
                   )}
                 </div>
 
-                <div className="chat-input-section">
-  {!isOnboardingActive && ( // Only show suggestions when NOT onboarding
+{/* Enhanced Chat Input with Voice Support */}
+<div className="chat-input-section">
+  {!isOnboardingActive && (
     <div className="suggestions">
       <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
         🎯 Recommendations
@@ -3073,31 +3566,60 @@ const syncUserActionWithDataManager = (action, data) => {
       </button>
     </div>
   )}
-  
-  <div className="chat-input">
+   {/* Voice Input Component */}
+  <div className="voice-input-wrapper">
+    <VoiceInput
+      onVoiceResult={handleVoiceResult}
+      onTranscriptionStart={handleVoiceTranscriptionStart}
+      onTranscriptionEnd={handleVoiceTranscriptionEnd}
+      isEnabled={isVoiceEnabled && !isOnboardingActive}
+      language="en-US"
+    />
+  </div>
+   <div className="chat-input">
     <input
       type="text"
       value={inputMessage}
       onChange={(e) => setInputMessage(e.target.value)}
-      onKeyPress={(e) => e.key === 'Enter' && !isOnboardingActive && sendMessage()}
+      onKeyPress={(e) => e.key === 'Enter' && !isOnboardingActive && !isProcessingVoice && sendMessage()}
       placeholder={
-        isOnboardingActive 
-          ? "Please select an option above..." 
-          : "Ask me anything about food..."
+        isProcessingVoice 
+          ? "Processing voice..." 
+          : isOnboardingActive 
+            ? "Please select an option above..." 
+            : "Type or speak your message..."
       }
-      disabled={isOnboardingActive} // KEEP input disabled during onboarding
+      disabled={isOnboardingActive || isProcessingVoice}
     />
-    <button 
+     <button 
       onClick={sendMessage} 
-      disabled={isOnboardingActive || !inputMessage.trim()} 
+      disabled={isOnboardingActive || !inputMessage.trim() || isProcessingVoice} 
       className="send-button"
     >
-      <span>🚀</span>
+      {isProcessingVoice ? <span>⏳</span> : <span>🚀</span>}
+    </button>
+    {/* Voice Toggle Button */}
+    <button 
+      onClick={toggleVoiceInput}
+      className={`voice-toggle ${isVoiceEnabled ? 'enabled' : 'disabled'}`}
+      title={isVoiceEnabled ? 'Disable voice input' : 'Enable voice input'}
+    >
+      {isVoiceEnabled ? '🎤' : '🔇'}
     </button>
   </div>
+  
+  {/* Voice processing indicator */}
+  {isProcessingVoice && (
+    <div className="voice-processing-indicator">
+      <div className="processing-spinner"></div>
+      <span>Processing your voice command...</span>
+    </div>
+  )}
 </div>
-              </div>
-            )}
+</div>
+)}
+
+            
 {/* Personalized Recommendations Full Page */}
 {showPersonalizedPage && (
   <div className="modal-overlay" onClick={() => setShowPersonalizedPage(false)}>
@@ -3349,6 +3871,51 @@ const syncUserActionWithDataManager = (action, data) => {
               </div>
             </div>
           )}
+
+          
+{/* Voice Response Modal */}
+{voiceResponse && !showChat && (
+  <div className="voice-response-modal">
+    <div className="voice-response-content">
+      <div className="voice-response-header">
+        <span className="voice-icon">🎤</span>
+        <span className="voice-label">Voice Assistant</span>
+        <button 
+          onClick={() => setVoiceResponse(null)}
+          className="voice-close"
+        >
+          ✖
+        </button>
+      </div>
+      
+      <div className="voice-response-message">
+        {voiceResponse.message}
+      </div>
+      
+      <div className="voice-response-actions">
+        <button 
+          onClick={() => {
+            setShowChat(true);
+            setVoiceResponse(null);
+          }}
+          className="voice-action-btn"
+        >
+          💬 Open Chat
+        </button>
+        <button 
+          onClick={() => setVoiceResponse(null)}
+          className="voice-action-btn secondary"
+        >
+          ✅ Got it
+        </button>
+      </div>
+      
+      <div className="voice-response-timestamp">
+        {voiceResponse.timestamp.toLocaleTimeString()}
+      </div>
+    </div>
+  </div>
+)}
 
           {/* Checkout Modal */}
           {showCheckout && (
