@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // frontend/src/App.js - PART 1: Imports, Constants, Helper Functions
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -7,18 +6,6 @@ import RestaurantManagement from './components/admin/RestaurantManagement';
 import UserAnalytics from './components/admin/UserAnalytics';
 import dataManager from './components/shared/DataManager';
 import './App.css';
-=======
-  // frontend/src/App.js - COMPLETE ENHANCED VERSION
-  import React, { useState, useEffect, useCallback } from 'react';
-  import AdminDashboard from './components/admin/AdminDashboard';
-  import OrderManagement from './components/admin/OrderManagement';
-  import RestaurantManagement from './components/admin/RestaurantManagement';
-  import UserAnalytics from './components/admin/UserAnalytics';
-  import dataManager from './components/shared/DataManager';
-  import VoiceInput from './components/shared/VoiceInput';
-  import VoiceOrderService from './services/voiceOrderService';
-  import './App.css';
->>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
 
 // ===== 1. ONBOARDING QUESTIONS =====
 const onboardingQuestions = [
@@ -188,8 +175,7 @@ const getPriceRangeDisplay = (priceRange) => {
     default: return 'Moderate';
   }
 };
-  // ===== 4. ENHANCED RECOMMENDATION ENGINE =====
-  // ===== 4. ENHANCED RECOMMENDATION ENGINE =====
+// ===== 4. ENHANCED RECOMMENDATION ENGINE =====
 const enhancedRecommendationEngineArrow = {
   getPersonalizedRecommendations: (userId, restaurants) => {
     const userData = getUserData(userId);
@@ -255,7 +241,6 @@ const enhancedRecommendationEngineArrow = {
     if (userData.favorites.includes(restaurant._id)) {
       return "Your favorite";
     }
-<<<<<<< HEAD
     
     const previousOrders = userData.orderHistory.filter(order => order.restaurantId === restaurant._id);
     if (previousOrders.length > 0) {
@@ -280,569 +265,6 @@ const enhancedRecommendationEngineArrow = {
       "Rs. 500-1000": 2,
       "Rs. 1000-1500": 3,
       "Above Rs. 1500": 4
-=======
-  };
-
-
-  // ===== 6. MAIN APP COMPONENT =====
-  function App() {
-     console.log('🚀 App function called - starting render');
-    // ===== ALL STATE VARIABLES =====
-    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
-    const [voiceOrderService] = useState(new VoiceOrderService());
-    const [isProcessingVoice, setIsProcessingVoice] = useState(false);
-    const [voiceResponse, setVoiceResponse] = useState(null);
-    const [restaurants, setRestaurants] = useState([]);
-    const [selectedRestaurant, setSelectedRestaurant] = useState(null);
-    const [menu, setMenu] = useState([]);
-    const [cart, setCart] = useState([]);
-    const [adminActiveTab, setAdminActiveTab] = useState('dashboard');
-    const [showChat, setShowChat] = useState(false);
-    const [messages, setMessages] = useState([]);
-    const [inputMessage, setInputMessage] = useState('');
-    const [dynamicPricing, setDynamicPricing] = useState(null);
-    const [pricingLoading, setPricingLoading] = useState(false);
-    const [surgeStatus, setSurgeStatus] = useState(null);
-    const [showCheckout, setShowCheckout] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [isOnboardingActive, setIsOnboardingActive] = useState(false);
-    const [enhancedRecommendations, setEnhancedRecommendations] = useState([]);
-    const [showPersonalizedPage, setShowPersonalizedPage] = useState(false);
-    const [loadingEnhancedRecs, setLoadingEnhancedRecs] = useState(false);
-    const [showEnhancedRecs, setShowEnhancedRecs] = useState(false);
-    const [deliveryAddress, setDeliveryAddress] = useState({
-      name: '',
-      phone: '',
-      area: '',
-      street: '',
-      instructions: ''
-    });
-    const [orderStatus, setOrderStatus] = useState(null);
-    const [showOrderTracking, setShowOrderTracking] = useState(false);
-    const [currentOrderStatus, setCurrentOrderStatus] = useState('confirmed');
-    const [showAuth, setShowAuth] = useState(false);
-    const [isLogin, setIsLogin] = useState(true);
-    const [currentUser, setCurrentUser] = useState(null);
-    const [authForm, setAuthForm] = useState({
-      name: '',
-      email: '',
-      password: '',
-      phone: ''
-    });
-    const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-    const [isNewUser, setIsNewUser] = useState(false);
-   
-   
-    
-    const [allOrders] = useState([
-      {
-        id: 'ORD001',
-        restaurant: 'Student Biryani',
-        customer: 'Ahmed Khan',
-        total: 450,
-        status: 'Delivered',
-        date: '2024-01-14',
-        items: ['Chicken Biryani', 'Raita']
-      },
-      {
-        id: 'ORD002', 
-        restaurant: 'KFC Pakistan',
-        customer: 'Fatima Ali',
-        total: 210,
-        status: 'Confirmed',
-        date: '2024-01-14',
-        items: ['Zinger Burger', 'Fries']
-      }
-    ]);
-    // NEW STATE VARIABLES FOR ENHANCED USER SYSTEM
-    const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0);
-    const [userPreferences, setUserPreferences] = useState({});
-    const [isTyping, setIsTyping] = useState(false);
-    const [showUserProfile, setShowUserProfile] = useState(false);
-    const [showRatingModal, setShowRatingModal] = useState(false);
-    const [selectedOrderForRating, setSelectedOrderForRating] = useState(null);
-    const [currentRating, setCurrentRating] = useState(0);
-    const [currentFeedback, setCurrentFeedback] = useState('');
-
-
-    // Handle voice input result
-const handleVoiceResult = async (transcript) => {
-  console.log('🎤 Voice input received:', transcript);
-  setIsProcessingVoice(true);
-  
-  try {
-    // Process voice command locally
-    const processed = voiceOrderService.processVoiceCommand(transcript, {
-      selectedRestaurant,
-      cartItems: cart,
-      currentUser
-    });
-    
-    console.log('🧠 Processed voice command:', processed);
-    
-    // Execute actions based on voice command
-    await executeVoiceActions(processed.actions, processed);
-    
-    // Add voice message to chat
-    const userMsg = {
-      role: 'user',
-      content: `🎤 ${transcript}`,
-      isVoiceInput: true,
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
-    
-    // Show AI response
-    const botResponse = {
-      role: 'bot',
-      content: processed.response,
-      timestamp: new Date().toLocaleTimeString(),
-      voiceProcessed: true,
-      confidence: processed.confidence,
-      detectedIntent: processed.intent,
-      // Add data for rendering
-      restaurants: processed.actions?.some(a => a.type === 'SEARCH_RESTAURANTS') 
-        ? restaurants.filter(r => r.cuisine?.some(c => 
-            processed.entities?.foods?.some(f => 
-              c.toLowerCase().includes(f.name.toLowerCase())
-            )
-          )).slice(0, 4)
-        : [],
-      suggestions: ['Order from these', 'Show more', 'Different cuisine']
-    };
-    
-    setMessages(prev => [...prev, botResponse]);
-    
-    // If chat is not open, show voice response
-    if (!showChat) {
-      setVoiceResponse({
-        message: processed.response,
-        actions: processed.actions,
-        timestamp: new Date()
-      });
-      
-      setTimeout(() => setVoiceResponse(null), 5000);
-    }
-    
-  } catch (error) {
-    console.error('❌ Voice processing error:', error);
-    
-    // Fallback: send to regular chat system
-    setInputMessage(transcript);
-    if (showChat) {
-      sendMessage();
-    }
-  } finally {
-    setIsProcessingVoice(false);
-  }
-};
-
-// Handle voice reorder
-const handleVoiceReorder = async () => {
-  if (!currentUser) {
-    const loginMessage = {
-      role: 'bot',
-      content: 'Please login first to see your previous orders:',
-      suggestions: ['Login', 'Create account', 'Browse restaurants'],
-      timestamp: new Date().toLocaleTimeString()
-    };
-    setMessages(prev => [...prev, loginMessage]);
-    setShowAuth(true);
-    return;
-  }
-
-  const userData = getUserData(currentUser.id);
-  
-  if (userData.orderHistory && userData.orderHistory.length > 0) {
-    const recentOrders = userData.orderHistory.slice(0, 3);
-    
-    const reorderMessage = {
-      role: 'bot',
-      content: `🔄 Here are your recent orders. Which one would you like to reorder?`,
-      orderHistory: recentOrders,
-      suggestions: ['Reorder this', 'Show more orders', 'New order instead'],
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    setMessages(prev => [...prev, reorderMessage]);
-  } else {
-    const noOrdersMessage = {
-      role: 'bot',
-      content: 'You haven\'t placed any orders yet. Let me show you some great restaurants:',
-      restaurants: restaurants.slice(0, 4),
-      suggestions: ['Order from these', 'Show recommendations', 'Popular restaurants'],
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    setMessages(prev => [...prev, noOrdersMessage]);
-  }
-};
-// Execute actions based on voice commands
-const executeVoiceActions = async (actions, processed) => {
-  if (!actions || actions.length === 0) return;
-  
-  for (const action of actions) {
-    console.log('🎯 Executing voice action:', action.type);
-    
-    switch (action.type) {
-      case 'SEARCH_RESTAURANTS':
-        await handleVoiceSearchRestaurants(action.payload);
-        break;
-
-      case 'SEARCH_RESTAURANTS_BY_CUISINE':
-        await handleVoiceSearchByCuisine(action.payload);
-        break;
-        
-      case 'ADD_TO_CART':
-        await handleVoiceAddToCart(action.payload);
-        break;
-        
-      case 'SHOW_CART':
-        const cartSection = document.querySelector('.cart-section');
-        if (cartSection) {
-          cartSection.scrollIntoView({ behavior: 'smooth' });
-        }
-        break;
-        
-      case 'PLACE_ORDER':
-        if (cart.length > 0) {
-          setShowCheckout(true);
-        } else {
-          const emptyCartMessage = {
-            role: 'bot',
-            content: 'Your cart is empty. Let me show you some restaurants to order from:',
-            restaurants: restaurants.slice(0, 4),
-            suggestions: ['Order from these', 'Show recommendations', 'Popular items'],
-            timestamp: new Date().toLocaleTimeString()
-          };
-          setMessages(prev => [...prev, emptyCartMessage]);
-        }
-        break;
-        
-      case 'SHOW_RECOMMENDATIONS':
-        await handleVoiceShowRecommendations();
-        break;
-
-      case 'SHOW_POPULAR':
-        await handleVoiceShowPopular();
-        break;
-
-      case 'SHOW_ORDER_HISTORY_FOR_REORDER':
-        await handleVoiceReorder();
-        break;
-        
-      case 'SHOW_ORDER_HISTORY':
-        if (currentUser) {
-          setShowUserProfile(true);
-        } else {
-          const loginMessage = {
-            role: 'bot',
-            content: 'Please login first to see your order history:',
-            suggestions: ['Login', 'Create account', 'Browse as guest'],
-            timestamp: new Date().toLocaleTimeString()
-          };
-          setMessages(prev => [...prev, loginMessage]);
-          setShowAuth(true);
-        }
-        break;
-        
-      default:
-        console.log('Unknown voice action:', action.type);
-        break;
-    }
-  }
-};
-// Handle voice search by cuisine
-const handleVoiceSearchByCuisine = async (payload) => {
-  console.log('🍽️ Voice cuisine search:', payload);
-  
-  const { cuisine } = payload;
-  
-  if (cuisine && cuisine.length > 0) {
-    const requestedCuisine = cuisine[0].toLowerCase();
-    
-    const filteredRestaurants = restaurants.filter(restaurant => {
-      if (!restaurant.cuisine) return false;
-      
-      return restaurant.cuisine.some(c => {
-        const cuisineLower = c.toLowerCase();
-        
-        // Enhanced cuisine matching
-        if (requestedCuisine === 'italian') {
-          return cuisineLower.includes('italian') || cuisineLower.includes('pizza');
-        }
-        if (requestedCuisine === 'chinese') {
-          return cuisineLower.includes('chinese') || cuisineLower.includes('asian');
-        }
-        if (requestedCuisine === 'pakistani') {
-          return cuisineLower.includes('pakistani') || cuisineLower.includes('desi') || cuisineLower.includes('traditional');
-        }
-        if (requestedCuisine === 'fast food') {
-          return cuisineLower.includes('fast') || cuisineLower.includes('burger') || cuisineLower.includes('pizza');
-        }
-        if (requestedCuisine === 'bbq') {
-          return cuisineLower.includes('bbq') || cuisineLower.includes('barbecue') || cuisineLower.includes('grilled');
-        }
-        
-        return cuisineLower.includes(requestedCuisine) || requestedCuisine.includes(cuisineLower);
-      });
-    });
-    
-    console.log('🏪 Found cuisine restaurants:', filteredRestaurants.length);
-    
-    const cuisineMessage = {
-      role: 'bot',
-      content: `🍽️ Found ${filteredRestaurants.length} ${requestedCuisine} restaurants:`,
-      restaurants: filteredRestaurants.slice(0, 6),
-      suggestions: ['Order from these', 'Show more', 'Different cuisine', 'Popular items'],
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    setMessages(prev => [...prev, cuisineMessage]);
-    
-    if (filteredRestaurants.length === 0) {
-      const fallbackMessage = {
-        role: 'bot',
-        content: `Sorry, no ${requestedCuisine} restaurants found. Here are popular options:`,
-        restaurants: restaurants.slice(0, 4),
-        suggestions: ['Try these instead', 'Show all restaurants', 'Different cuisine'],
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setMessages(prev => [...prev, fallbackMessage]);
-    }
-  }
-};
-
-
-
-// Handle voice restaurant search
-const handleVoiceSearchRestaurants = async (payload) => {
-  console.log('🔍 Voice restaurant search:', payload);
-  
-  const { cuisine, restaurant } = payload;
-  
-  if (restaurant) {
-    const foundRestaurant = restaurants.find(r => 
-      r.name.toLowerCase().includes(restaurant.toLowerCase())
-    );
-    
-    if (foundRestaurant) {
-      selectRestaurant(foundRestaurant);
-      return;
-    }
-  }
-  
-  if (cuisine && cuisine.length > 0) {
-    const filteredRestaurants = restaurants.filter(restaurant =>
-      restaurant.cuisine && restaurant.cuisine.some(c =>
-        cuisine.some(requestedCuisine =>
-          c.toLowerCase().includes(requestedCuisine.toLowerCase()) ||
-          requestedCuisine.toLowerCase().includes(c.toLowerCase())
-        )
-      )
-    );
-    
-    console.log('🏪 Found restaurants:', filteredRestaurants.length);
-    
-    if (filteredRestaurants.length === 1) {
-      selectRestaurant(filteredRestaurants[0]);
-    } else if (filteredRestaurants.length > 1) {
-      // Show in chat
-      const restaurantMessage = {
-        role: 'bot',
-        content: `Found ${filteredRestaurants.length} restaurants serving ${cuisine.join(', ')}:`,
-        restaurants: filteredRestaurants.slice(0, 4),
-        suggestions: ['Order from these', 'Show more', 'Different cuisine'],
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setMessages(prev => [...prev, restaurantMessage]);
-    } else {
-      const noResultsMessage = {
-        role: 'bot',
-        content: `No restaurants found serving ${cuisine.join(', ')}. Here are popular options:`,
-        restaurants: restaurants.slice(0, 4),
-        suggestions: ['Try these instead', 'Browse all restaurants'],
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setMessages(prev => [...prev, noResultsMessage]);
-    }
-  }
-};
-// Handle voice show recommendations
-const handleVoiceShowRecommendations = async () => {
-  if (!currentUser || currentUser.isAdmin) {
-    const loginMessage = {
-      role: 'bot',
-      content: 'Please login to get personalized recommendations:',
-      suggestions: ['Login', 'Create account', 'Show popular restaurants'],
-      timestamp: new Date().toLocaleTimeString()
-    };
-    setMessages(prev => [...prev, loginMessage]);
-    setShowAuth(true);
-    return;
-  }
-
-  // Show recommendations in chat
-  if (enhancedRecommendations && enhancedRecommendations.length > 0) {
-    const recMessage = {
-      role: 'bot',
-      content: `🎯 Based on your taste profile, here are my top recommendations:`,
-      type: 'enhanced_recommendations',
-      recommendations: enhancedRecommendations.slice(0, 5),
-      timestamp: new Date().toLocaleTimeString()
-    };
-    setMessages(prev => [...prev, recMessage]);
-  } else {
-    // Fetch recommendations
-    try {
-      await fetchEnhancedRecommendations(currentUser.id);
-      
-      // Wait a bit for the state to update, then show them
-      setTimeout(() => {
-        if (enhancedRecommendations && enhancedRecommendations.length > 0) {
-          const recMessage = {
-            role: 'bot',
-            content: `🎯 Here are my personalized recommendations for you:`,
-            type: 'enhanced_recommendations', 
-            recommendations: enhancedRecommendations.slice(0, 5),
-            timestamp: new Date().toLocaleTimeString()
-          };
-          setMessages(prev => [...prev, recMessage]);
-        }
-      }, 2000);
-    } catch (error) {
-      console.error('Error fetching recommendations:', error);
-      
-      const errorMessage = {
-        role: 'bot',
-        content: 'Having trouble getting your recommendations. Here are popular restaurants:',
-        restaurants: restaurants.slice(0, 5),
-        suggestions: ['Order from these', 'Try again later', 'Show all restaurants'],
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    }
-  }
-};
-
-// Handle voice show popular
-const handleVoiceShowPopular = async () => {
-  // Get popular restaurants (highest rated)
-  const popularRestaurants = restaurants
-    .filter(r => r.rating && r.rating >= 4.0)
-    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-    .slice(0, 6);
-
-  const popularMessage = {
-    role: 'bot',
-    content: `🔥 Here are the most popular restaurants right now:`,
-    restaurants: popularRestaurants,
-    suggestions: ['Order from these', 'Show trending items', 'My recommendations'],
-    timestamp: new Date().toLocaleTimeString()
-  };
-  
-  setMessages(prev => [...prev, popularMessage]);
-};
-// Handle voice add to cart
-const handleVoiceAddToCart = async (payload) => {
-  console.log('🛒 Voice add to cart:', payload);
-  
-  if (!selectedRestaurant) {
-    const selectRestaurantMessage = {
-      role: 'bot',
-      content: 'Please select a restaurant first! Here are some popular options:',
-      restaurants: restaurants.slice(0, 4),
-      suggestions: ['Select restaurant', 'Show all restaurants'],
-      timestamp: new Date().toLocaleTimeString()
-    };
-    setMessages(prev => [...prev, selectRestaurantMessage]);
-    return;
-  }
-  
-  const { items } = payload;
-  
-  for (const voiceItem of items) {
-    const menuItem = menu.find(item =>
-      item.name.toLowerCase().includes(voiceItem.name.toLowerCase()) ||
-      voiceItem.name.toLowerCase().includes(item.name.toLowerCase())
-    );
-    
-    if (menuItem) {
-      console.log('✅ Adding to cart:', menuItem.name);
-      
-      for (let i = 0; i < (voiceItem.quantity || 1); i++) {
-        addToCart(menuItem);
-      }
-      
-      const successMsg = {
-        role: 'bot',
-        content: `✅ Added ${voiceItem.quantity || 1}x ${menuItem.name} to your cart!`,
-        timestamp: new Date().toLocaleTimeString(),
-        suggestions: ['Add more items', 'View cart', 'Checkout now']
-      };
-      
-      setMessages(prev => [...prev, successMsg]);
-    } else {
-      console.log('❌ Menu item not found:', voiceItem.name);
-      
-      const errorMsg = {
-        role: 'bot',
-        content: `❌ Sorry, I couldn't find "${voiceItem.name}" on the menu. Here are available items:`,
-        menuItems: menu.slice(0, 3),
-        timestamp: new Date().toLocaleTimeString(),
-        suggestions: ['Try these items', 'Show full menu', 'Different restaurant']
-      };
-      
-      setMessages(prev => [...prev, errorMsg]);
-    }
-  }
-};
-
-// Voice transcription handlers
-const handleVoiceTranscriptionStart = () => {
-  console.log('🎤 Voice transcription started');
-  setIsProcessingVoice(true);
-};
-
-const handleVoiceTranscriptionEnd = () => {
-  console.log('🛑 Voice transcription ended');
-  setIsProcessingVoice(false);
-};
-
-// Toggle voice functionality
-const toggleVoiceInput = () => {
-  setIsVoiceEnabled(!isVoiceEnabled);
-  if (!isVoiceEnabled) {
-    console.log('🎤 Voice input enabled');
-  } else {
-    console.log('🔇 Voice input disabled');
-  }
-};
-
-    // Function to fetch surge status
-    const fetchSurgeStatus = async () => {
-      try {
-        const location = {
-          type: 'Point',
-          coordinates: [67.0011, 24.8607]
-        };
-        
-        const response = await fetch('http://localhost:5000/api/pricing/surge-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ location })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-          setSurgeStatus(data.surgeStatus);
-          console.log('🔥 Surge status:', data.surgeStatus);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching surge status:', error);
-      }
->>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
     };
     
     const priceMap = {
@@ -993,11 +415,7 @@ function App() {
         setLoadingEnhancedRecs(false);
     }
 };
- 
-
-    // ===== ANALYTICS FUNCTION =====
-<<<<<<< HEAD
-   // ===== ANALYTICS FUNCTION =====
+// ===== ANALYTICS FUNCTION =====
   const fetchAnalytics = useCallback(() => {
     setTimeout(() => {
       const restaurantOrders = {};
@@ -1012,82 +430,6 @@ function App() {
       });
     }, 1000);
   }, [allOrders]);
-=======
-    const fetchAnalytics = useCallback(() => {
-      
-      setTimeout(() => {
-        const restaurantOrders = {};
-        allOrders.forEach(order => {
-          const restName = order.restaurant;
-          restaurantOrders[restName] = (restaurantOrders[restName] || 0) + 1;
-        });
-        
-        const statusCounts = {};
-        allOrders.forEach(order => {
-          statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
-        });
-        
-      }, 1000);
-    }, [allOrders]);
-
-    // ===== useEffect HOOKS =====
-    useEffect(() => {
-      fetchRestaurants();
-    }, []);
-
-    useEffect(() => {
-  // Initialize enhanced data manager when app loads
-  dataManager.initializeData();
-}, []);
-
-useEffect(() => {
-  console.log('🔄 New user effect triggered', {
-    isNewUser,
-    currentUser: currentUser?.name,
-    showChat,
-    isOnboardingActive,
-    messagesLength: messages.length
-  });
-  
-  // If it's a new user and chat is open but onboarding hasn't started
-  if (isNewUser && showChat && currentUser && !isOnboardingActive && messages.length === 0) {
-    console.log('🚀 Auto-starting onboarding from useEffect...');
-    const timeoutId = setTimeout(() => {
-      setIsOnboardingActive(true);
-      setCurrentOnboardingStep(0);
-      setUserPreferences({});
-      
-      const welcomeMessage = {
-        role: 'bot',
-        content: `Welcome to Pakistani Food Delivery, ${currentUser?.name || 'there'}! 🎉\n\nI'm your AI food assistant and I'll help you discover the perfect meals based on your preferences. Let's get to know your taste!`,
-        isOnboarding: true,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      setMessages([welcomeMessage]);
-      
-      setTimeout(() => {
-        if (isOnboardingActive && currentUser) {
-          console.log('📝 Showing first onboarding question...');
-          const firstQuestion = onboardingQuestions[0];
-          
-          const questionMessage = {
-            role: 'bot',
-            content: firstQuestion.question,
-            isOnboarding: true,
-            questionData: firstQuestion,
-            timestamp: new Date().toLocaleTimeString()
-          };
-          
-          setMessages(prev => [...prev, questionMessage]);
-        }
-      }, 2000);
-    }, 1000);
-    
-    return () => clearTimeout(timeoutId);
-  }
-}, [isNewUser, showChat, currentUser, isOnboardingActive, messages.length]);
->>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
 
   // ===== useEffect HOOKS =====
   useEffect(() => {
@@ -1233,8 +575,6 @@ useEffect(() => {
     const deliveryFee = 50;
     return { subtotal, deliveryFee, total: subtotal + deliveryFee };
   };
-
-    // ===== AUTH FUNCTIONS =====
   // ===== AUTH FUNCTIONS =====
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -1410,9 +750,7 @@ useEffect(() => {
       }
     }
   };
-
-    // ===== ENHANCED CHATBOT FUNCTIONS =====
-    // ===== ENHANCED CHATBOT FUNCTIONS =====
+  // ===== ENHANCED CHATBOT FUNCTIONS =====
   const startOnboarding = () => {
     console.log('startOnboarding called', {
       isOnboardingActive,
@@ -1937,8 +1275,7 @@ useEffect(() => {
         </div>
     );
   };
-
-// Send Message Function
+  // Send Message Function
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
@@ -2273,9 +1610,7 @@ useEffect(() => {
     
     return null; // Not a local command, will try backend
   };
-
-// Generate enhanced local response for fallback
-// Generate enhanced local response for fallback
+  // Generate enhanced local response for fallback
   const generateEnhancedLocalResponse = async (input) => {
     const lowerInput = input.toLowerCase();
     
@@ -2613,7 +1948,7 @@ useEffect(() => {
     // Force re-render to update the heart icons
     setSelectedRestaurant(selectedRestaurant ? {...selectedRestaurant} : null);
   };
-    // ===== ENHANCED PLACE ORDER FUNCTION =====
+  // ===== ENHANCED PLACE ORDER FUNCTION =====
   const placeOrder = async () => {
     if (!currentUser) {
       alert('Please login to place an order');
@@ -2749,8 +2084,7 @@ useEffect(() => {
       localStorage.setItem('enhanced_orders', JSON.stringify(existingOrders));
     }
   };
-
-   // ===== RENDER COMPONENT =====
+  // ===== RENDER COMPONENT =====
   return (
     <div className="App">
       {/* Header */}
@@ -2982,7 +2316,6 @@ useEffect(() => {
           </>
         )}
 
-<<<<<<< HEAD
         {/* Enhanced Smart Chatbot */}
         {showChat && (
           <div className="smart-chatbot">
@@ -2990,358 +2323,6 @@ useEffect(() => {
               <div className="chat-title">
                 <h3>Smart Food Assistant</h3>
                 {isNewUser && <span className="onboarding-badge">Setting up your profile...</span>}
-=======
-{/* Cart Summary Display */}
-{msg.cartItems && msg.cartItems.length > 0 && (
-  <div className="chat-cart-summary">
-    <h4>🛒 Your Cart</h4>
-    {msg.cartItems.map((item, idx) => (
-      <div key={idx} className="cart-item-summary">
-        {item.menuItem.name} x{item.quantity} - Rs. {item.price * item.quantity}
-      </div>
-    ))}
-    {msg.cartTotal && (
-      <div className="cart-total-summary">
-        <strong>Subtotal: Rs. {msg.cartTotal}</strong>
-      </div>
-    )}
-  </div>
-)}
-
-{/* Enhanced Quick Replies */}
-{msg.suggestions && msg.suggestions.length > 0 && (
-  <div className="quick-replies">
-    {msg.suggestions.map((suggestion, idx) => (
-      <button
-        key={idx}
-        className="quick-reply-btn"
-        onClick={() => {
-          setInputMessage(suggestion);
-          sendMessage();
-        }}
-      >
-        {suggestion}
-      </button>
-    ))}
-  </div>
-)}
-
-{/* Action Buttons */}
-{msg.actions && msg.actions.length > 0 && (
-  <div className="chat-actions">
-    {msg.actions.map((action, idx) => (
-      <button
-        key={idx}
-        className="chat-action-btn"
-        onClick={() => {
-          if (action === 'Checkout' && cart.length > 0) {
-            setShowCheckout(true);
-            setShowChat(false);
-          } else if (action === 'View Menu' && selectedRestaurant) {
-            setShowChat(false);
-          } else {
-            setInputMessage(action);
-            sendMessage();
-          }
-        }}
-      >
-        {action}
-      </button>
-    ))}
-  </div>
-)}
-
-    {/* Order History Display (keep existing) */}
-    {msg.orderHistory && (
-      <ChatOrderHistory orders={msg.orderHistory} />
-    )}
-
-    {/* Onboarding options (keep existing) */}
-    {msg.questionData && msg.isOnboarding && (
-      <div className="onboarding-options">
-        <p style={{marginBottom: '10px', fontWeight: 'bold', color: '#667eea'}}>
-          Please select an option:
-        </p>
-        {msg.questionData.options.map((option, idx) => (
-          <button
-            key={idx}
-            className="option-button"
-            onClick={() => {
-              console.log(' Option selected:', option);
-              handleOptionSelect(option, msg.questionData.key);
-            }}
-            style={{
-              margin: '5px',
-              padding: '10px 15px',
-              backgroundColor: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    )}
-  </div>
-))}
-
-
-                  {isTyping && (
-                    <div className="typing-indicator">
-                      <div className="typing-dots">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                      </div>
-                      <span className="typing-text">AI is thinking...</span>
-                    </div>
-                  )}
-                </div>
-
-{/* Enhanced Chat Input with Voice Support */}
-<div className="chat-input-section">
-  {!isOnboardingActive && (
-    <div className="suggestions">
-      <button onClick={() => handleQuickReply("Show recommendations")} className="suggestion-chip">
-        🎯 Recommendations
-      </button>
-      <button onClick={() => handleQuickReply("Popular restaurants")} className="suggestion-chip">
-        🔥 Popular
-      </button>
-      <button onClick={() => handleQuickReply("My orders")} className="suggestion-chip">
-        📋 My Orders
-      </button>
-      <button onClick={() => handleQuickReply("My favorites")} className="suggestion-chip">
-        ❤️ Favorites
-      </button>
-    </div>
-  )}
-   {/* Voice Input Component */}
-  <div className="voice-input-wrapper">
-    <VoiceInput
-      onVoiceResult={handleVoiceResult}
-      onTranscriptionStart={handleVoiceTranscriptionStart}
-      onTranscriptionEnd={handleVoiceTranscriptionEnd}
-      isEnabled={isVoiceEnabled && !isOnboardingActive}
-      language="en-US"
-    />
-  </div>
-   <div className="chat-input">
-    <input
-      type="text"
-      value={inputMessage}
-      onChange={(e) => setInputMessage(e.target.value)}
-      onKeyPress={(e) => e.key === 'Enter' && !isOnboardingActive && !isProcessingVoice && sendMessage()}
-      placeholder={
-        isProcessingVoice 
-          ? "Processing voice..." 
-          : isOnboardingActive 
-            ? "Please select an option above..." 
-            : "Type or speak your message..."
-      }
-      disabled={isOnboardingActive || isProcessingVoice}
-    />
-     <button 
-      onClick={sendMessage} 
-      disabled={isOnboardingActive || !inputMessage.trim() || isProcessingVoice} 
-      className="send-button"
-    >
-      {isProcessingVoice ? <span>⏳</span> : <span>🚀</span>}
-    </button>
-    {/* Voice Toggle Button */}
-    <button 
-      onClick={toggleVoiceInput}
-      className={`voice-toggle ${isVoiceEnabled ? 'enabled' : 'disabled'}`}
-      title={isVoiceEnabled ? 'Disable voice input' : 'Enable voice input'}
-    >
-      {isVoiceEnabled ? '🎤' : '🔇'}
-    </button>
-  </div>
-  
-  {/* Voice processing indicator */}
-  {isProcessingVoice && (
-    <div className="voice-processing-indicator">
-      <div className="processing-spinner"></div>
-      <span>Processing your voice command...</span>
-    </div>
-  )}
-</div>
-</div>
-)}
-
-            
-{/* Personalized Recommendations Full Page */}
-{showPersonalizedPage && (
-  <div className="modal-overlay" onClick={() => setShowPersonalizedPage(false)}>
-    <div className="personalized-page-modal" onClick={(e) => e.stopPropagation()}>
-      <div className="personalized-page-header">
-        <h2>Your Personalized Recommendations</h2>
-        <button onClick={() => setShowPersonalizedPage(false)} className="close-button">✖</button>
-      </div>
-      
-      <div className="personalized-page-content">
-        <EnhancedRecommendationsSection />
-      </div>
-      
-      <div className="personalized-page-actions">
-        <button 
-          className="back-to-main-btn"
-          onClick={() => setShowPersonalizedPage(false)}
-        >
-          ← Back to Restaurants
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-          {/* User Profile Modal */}
-          {showUserProfile && currentUser && (
-            <div className="modal-overlay" onClick={() => setShowUserProfile(false)}>
-              <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>👤 My Profile</h2>
-                  <button onClick={() => setShowUserProfile(false)} className="close-button">✖</button>
-                </div>
-                
-                {(() => {
-                  const userData = getUserData(currentUser.id);
-                  return (
-                    <div className="profile-content">
-                      {/* User Stats */}
-                      <div className="profile-section">
-                        <h3>📊 Your Food Journey</h3>
-                        <div className="stats-grid">
-                          <div className="stat-item">
-                            <span className="stat-number">{userData.behaviorData.totalOrders}</span>
-                            <span className="stat-label">Total Orders</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-number">Rs. {userData.behaviorData.totalSpent}</span>
-                            <span className="stat-label">Total Spent</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-number">Rs. {Math.round(userData.behaviorData.averageOrderValue)}</span>
-                            <span className="stat-label">Avg Order</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-number">{userData.favorites.length}</span>
-                            <span className="stat-label">Favorites</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Preferences */}
-                      <div className="profile-section">
-                        <h3> Your Preferences</h3>
-                        <div className="preferences-grid">
-                          <div className="pref-item">
-                            <strong>Cuisine:</strong> {userData.preferences.cuisine || 'Not set'}
-                          </div>
-                          <div className="pref-item">
-                            <strong>Spice Level:</strong> {userData.preferences.spiceLevel || 'Not set'}
-                          </div>
-                          <div className="pref-item">
-                            <strong>Budget:</strong> {userData.preferences.budget || 'Not set'}
-                          </div>
-                          <div className="pref-item">
-                            <strong>Dietary:</strong> {userData.preferences.dietary || 'Not set'}
-                          </div>
-                          <div className="pref-item">
-                            <strong>Timing:</strong> {userData.preferences.timing || 'Not set'}
-                          </div>
-                          <div className="pref-item">
-                            <strong>Most Ordered:</strong> {userData.behaviorData.mostOrderedCuisine || 'Not enough data'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Recent Orders */}
-                      <div className="profile-section">
-                        <h3>📋 Recent Orders</h3>
-                        {userData.orderHistory.length > 0 ? (
-                          <div className="orders-list">
-                            {userData.orderHistory.slice(0, 5).map((order, index) => (
-                              <div key={order.id} className="order-item">
-                                <div className="order-info">
-                                  <h4>{order.restaurantName}</h4>
-                                  <p>{order.items.map(item => `${item.name} (${item.quantity}x)`).join(', ')}</p>
-                                  <div className="order-meta">
-                                    <span>Rs. {order.total}</span>
-                                    <span>{new Date(order.date).toLocaleDateString()}</span>
-                                    <span className={`status ${order.status}`}>{order.status}</span>
-                                  </div>
-                                </div>
-                                <div className="order-actions">
-                                  {order.rating ? (
-                                    <div className="existing-rating">
-                                      <span>{'⭐'.repeat(order.rating)}</span>
-                                      <span>Rated</span>
-                                    </div>
-                                  ) : (
-                                    <button 
-                                      className="rate-btn"
-                                      onClick={() => handleRateOrder(order.id)}
-                                    >
-                                      Rate Order
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="no-orders">No orders yet. Start exploring restaurants!</p>
-                        )}
-                      </div>
-
-                      {/* Favorite Restaurants */}
-                      <div className="profile-section">
-                        <h3>❤️ Favorite Restaurants</h3>
-                        {userData.favorites.length > 0 ? (
-                          <div className="favorites-grid">
-                            {userData.favorites.map(favId => {
-                              const restaurant = restaurants.find(r => r._id === favId);
-                              return restaurant ? (
-                                <div key={favId} className="favorite-item">
-                                  <h4>{restaurant.name}</h4>
-                                  <p>{restaurant.cuisine?.join(', ')}</p>
-                                  <div className="favorite-actions">
-                                    <button onClick={() => {
-                                      setShowUserProfile(false);
-                                      selectRestaurant(restaurant);
-                                    }}>View Menu</button>
-                                    <button 
-                                      className="remove-fav"
-                                      onClick={() => removeFromUserFavorites(currentUser.id, favId)}
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        ) : (
-                          <p className="no-favorites">No favorites yet. Try some restaurants and add them!</p>
-                        )}
-                      </div>
-
-                      {/* Update Preferences Button */}
-                      <div className="profile-actions">
-                        <button 
-    className="update-preferences-btn"
-    onClick={handlePreferenceUpdate}
-  >
-    🔄 Update Preferences
-  </button> 
-                      </div>
-                    </div>
-                  );
-                })()}
->>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
               </div>
               <button onClick={() => setShowChat(false)} className="close-chat">×</button>
             </div>
@@ -3516,7 +2497,7 @@ useEffect(() => {
                       </div>
                     </div>
                   )}
-   {/* Restaurant Recommendations */}
+                  {/* Restaurant Recommendations */}
                   {msg.recommendations && msg.recommendations.length > 0 && (
                     <div className="chat-recommendations">
                       {msg.recommendations.map((restaurant, idx) => (
@@ -3850,7 +2831,7 @@ useEffect(() => {
             </div>
           </div>
         )}
- {/* User Profile Modal */}
+        {/* User Profile Modal */}
         {showUserProfile && currentUser && (
           <div className="modal-overlay" onClick={() => setShowUserProfile(false)}>
             <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
@@ -4078,7 +3059,6 @@ useEffect(() => {
           </div>
         )}
 
-<<<<<<< HEAD
         {/* Checkout Modal */}
         {showCheckout && (
           <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
@@ -4090,61 +3070,6 @@ useEffect(() => {
               
               <div className="checkout-form">
                 <h3>Delivery Details</h3>
-=======
-          
-{/* Voice Response Modal */}
-{voiceResponse && !showChat && (
-  <div className="voice-response-modal">
-    <div className="voice-response-content">
-      <div className="voice-response-header">
-        <span className="voice-icon">🎤</span>
-        <span className="voice-label">Voice Assistant</span>
-        <button 
-          onClick={() => setVoiceResponse(null)}
-          className="voice-close"
-        >
-          ✖
-        </button>
-      </div>
-      
-      <div className="voice-response-message">
-        {voiceResponse.message}
-      </div>
-      
-      <div className="voice-response-actions">
-        <button 
-          onClick={() => {
-            setShowChat(true);
-            setVoiceResponse(null);
-          }}
-          className="voice-action-btn"
-        >
-          💬 Open Chat
-        </button>
-        <button 
-          onClick={() => setVoiceResponse(null)}
-          className="voice-action-btn secondary"
-        >
-          ✅ Got it
-        </button>
-      </div>
-      
-      <div className="voice-response-timestamp">
-        {voiceResponse.timestamp.toLocaleTimeString()}
-      </div>
-    </div>
-  </div>
-)}
-
-          {/* Checkout Modal */}
-          {showCheckout && (
-            <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
-              <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>Complete Your Order</h2>
-                  <button onClick={() => setShowCheckout(false)} className="close-button">✖</button>
-                </div>
->>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
                 
                 <div className="form-group">
                   <label>Full Name</label>

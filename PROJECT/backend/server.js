@@ -1106,10 +1106,6 @@ app.get('/api/analytics/dashboard', async (req, res) => {
         });
     }
 });
-
-
-<<<<<<< HEAD
-=======
 // Get dynamic price for a delivery
 app.post('/api/pricing/calculate-price', async (req, res) => {
     try {
@@ -1582,7 +1578,7 @@ console.log('🎯 New pricing endpoints available:');
 console.log('   POST /api/pricing/calculate-price');
 console.log('   GET  /api/pricing/analytics/:restaurantId');
 console.log('   POST /api/pricing/surge-status');
->>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
+
 
 // Start the server
 app.listen(PORT, () => {
