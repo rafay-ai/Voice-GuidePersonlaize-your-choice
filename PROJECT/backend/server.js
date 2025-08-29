@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/database');
+//const neuralRecommendationsRoutes = require('./routes/neuralRecommendations');
 
 // Import models
 const User = require('./models/User');
@@ -9,6 +10,7 @@ const Restaurant = require('./models/Restaurant');
 const MenuItem = require('./models/MenuItem');
 const Order = require('./models/Order');
 const AdvancedRecommendationEngine = require('./services/advancedRecommendation');
+const neuralRecommendationsRoutes = require('./routes/neuralRecommendationsSimple');
 
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
@@ -39,7 +41,6 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
-
 console.log('🔧 Setting up routes...');
 console.log('🎯 Advanced Recommendation Engine status:', !!advancedRecommendation);
 

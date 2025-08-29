@@ -370,9 +370,31 @@ function App() {
             requestUserId = '6870bd22f7b37e4543eebd97';
         }
         
+        // TRY NEURAL RECOMMENDATIONS FIRST
+        try {
+            const neuralUrl = `http://localhost:5000/api/neural/recommendations/${requestUserId}?limit=6&includeExplanation=true`;
+            console.log('Trying neural recommendations:', neuralUrl);
+            
+            const neuralResponse = await fetch(neuralUrl);
+            
+            if (neuralResponse.ok) {
+                const neuralData = await neuralResponse.json();
+                console.log('Neural recommendations response:', neuralData);
+                
+                if (neuralData.success && neuralData.recommendations && neuralData.recommendations.length > 0) {
+                    console.log('Using Neural Collaborative Filtering recommendations!');
+                    setEnhancedRecommendations(neuralData.recommendations);
+                    setShowEnhancedRecs(true);
+                    return;
+                }
+            }
+        } catch (neuralError) {
+            console.log('Neural recommendations not available, falling back to advanced system:', neuralError.message);
+        }
+        
+        // FALLBACK TO EXISTING ADVANCED SYSTEM
         const url = `http://localhost:5000/api/recommendations/advanced/${requestUserId}?count=6&includeNew=true`;
-        console.log('Requesting recommendations from:', url);
-        console.log('For user ID:', requestUserId);
+        console.log('Falling back to advanced recommendations:', url);
         
         const response = await fetch(url);
         
@@ -383,7 +405,7 @@ function App() {
         }
         
         const data = await response.json();
-        console.log('API Response for user', requestUserId, ':', data);
+        console.log('Advanced recommendations response:', data);
         
         if (data.success && data.recommendations && data.recommendations.length > 0) {
             const validRecommendations = data.recommendations.filter((rec, index) => {
@@ -399,16 +421,16 @@ function App() {
                 return isValid;
             });
             
-            console.log(`Valid recommendations for user ${requestUserId}:`, validRecommendations.length);
+            console.log(`Valid advanced recommendations: ${validRecommendations.length}`);
             setEnhancedRecommendations(validRecommendations);
             setShowEnhancedRecs(true);
         } else {
-            console.log(`No recommendations for user ${requestUserId}`);
+            console.log('No advanced recommendations available');
             setEnhancedRecommendations([]);
             setShowEnhancedRecs(true);
         }
     } catch (error) {
-        console.error('Enhanced recommendations error:', error);
+        console.error('All recommendation systems failed:', error);
         setEnhancedRecommendations([]);
         setShowEnhancedRecs(true);
     } finally {
