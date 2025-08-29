@@ -1,12 +1,12 @@
+// backend/config/database.js
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/food_delivery_app');
-    
+    const conn = await mongoose.connect('mongodb://localhost:27017/food-delivery');
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error('Database connection error:', error);
+    console.error('MongoDB connection error:', error);
     process.exit(1);
   }
 };

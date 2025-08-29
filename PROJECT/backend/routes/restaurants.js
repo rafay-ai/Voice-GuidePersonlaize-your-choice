@@ -1,112 +1,85 @@
-// backend/routes/restaurants.js
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const Restaurant = require('../models/Restaurant');
 
-// Load data
-const restaurants = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '../data/restaurants.json'))
-);
-const menuItems = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '../data/menu_items.json'))
-);
-
-// Get all restaurants with filters
-router.get('/', (req, res) => {
-    let filteredRestaurants = restaurants.restaurants;
+// GET all restaurants
+router.get('/', async (req, res) => {
+  try {
+    const restaurants = await Restaurant.find({});
+    console.log(`Found ${restaurants.length} restaurants in database`);
     
-    // Filter by cuisine if provided
-    if (req.query.cuisine) {
-        filteredRestaurants = filteredRestaurants.filter(r =>
-            r.cuisine.some(c => 
-                c.toLowerCase().includes(req.query.cuisine.toLowerCase())
-            )
-        );
-    }
-    
-    // Filter by price range if provided
-    if (req.query.price) {
-        filteredRestaurants = filteredRestaurants.filter(r =>
-            r.price_range === req.query.price
-        );
-    }
-    
-    // Filter by rating if provided
-    if (req.query.minRating) {
-        filteredRestaurants = filteredRestaurants.filter(r =>
-            r.rating >= parseFloat(req.query.minRating)
-        );
-    }
-    
-    // Sort by rating (highest first)
-    filteredRestaurants.sort((a, b) => b.rating - a.rating);
-    
+    // Return in the format your frontend expects
     res.json({
-        success: true,
-        count: filteredRestaurants.length,
-        filters: {
-            cuisine: req.query.cuisine || 'all',
-            price: req.query.price || 'all',
-            minRating: req.query.minRating || 'none'
-        },
-        data: filteredRestaurants
+      success: true,
+      data: restaurants,
+      count: restaurants.length
     });
+  } catch (error) {
+    console.error('Error fetching restaurants:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching restaurants',
+      error: error.message
+    });
+  }
 });
 
-// Get single restaurant with its menu
-router.get('/:id', (req, res) => {
-    const restaurantId = parseInt(req.params.id);
-    
-    // Find restaurant
-    const restaurant = restaurants.restaurants.find(r => r.id === restaurantId);
+// GET restaurant by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const restaurant = await Restaurant.findById(req.params.id);
     
     if (!restaurant) {
-        return res.status(404).json({
-            success: false,
-            message: 'Restaurant not found'
-        });
+      return res.status(404).json({
+        success: false,
+        message: 'Restaurant not found'
+      });
     }
     
-    // Get its menu
-    const menu = menuItems.menu_items.filter(
-        item => item.restaurant_id === restaurantId
-    );
-    
     res.json({
-        success: true,
-        restaurant: restaurant,
-        menu: menu
+      success: true,
+      data: restaurant
     });
-});
-
-// Get popular restaurants
-router.get('/popular/top', (req, res) => {
-    const topRestaurants = restaurants.restaurants
-        .filter(r => r.rating >= 4.3)
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, 5);
-    
-    res.json({
-        success: true,
-        message: 'Top rated restaurants',
-        data: topRestaurants
+  } catch (error) {
+    console.error('Error fetching restaurant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching restaurant',
+      error: error.message
     });
+  }
 });
-
-// Get restaurants by area
-router.get('/area/:area', (req, res) => {
-    const area = req.params.area;
-    const areaRestaurants = restaurants.restaurants.filter(r =>
-        r.area.toLowerCase().includes(area.toLowerCase())
-    );
-    
-    res.json({
-        success: true,
-        area: area,
-        count: areaRestaurants.length,
-        data: areaRestaurants
-    });
-});
-
+app.get('/api/menu/:restaurantId', async (req, res) => {
+    try {
+        const restaurantId = req.params.restaurantId;
+        
+        // Check if restaurant exists
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+        
+        // Find menu items - using correct field names from seeding script
+        const menuItems = await MenuItem.find({ 
+            restaurant: restaurantId,
+            available: true  // Changed from isAvailable to available
+        }).sort({ category: 1, name: 1 });
+        
+        res.json({
+            success: true,
+            restaurant_id: restaurantId,
+            restaurant_name: restaurant.name,
+            items: menuItems
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching menu',
+            error: error.message
+        });
+    }
+}); 
 module.exports = router;

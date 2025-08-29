@@ -1,9 +1,11 @@
+// backend/models/MenuItem.js
 const mongoose = require('mongoose');
 
 const menuItemSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   description: {
     type: String,
@@ -14,54 +16,85 @@ const menuItemSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  image: {
-    type: String,
-    required: true
-  },
   category: {
     type: String,
     required: true,
-    enum: ['Starter', 'Main Course', 'Dessert', 'Beverage', 'Appetizer', 'Snack', 'Breakfast', 'Lunch', 'Dinner']
+    enum: [
+      'biryani', 'curry', 'bread', 'appetizer', 'dessert', 'beverage',
+      'rice', 'kebab', 'chicken', 'beef', 'mutton', 'vegetarian',
+      'seafood', 'snacks', 'traditional', 'fast_food'
+    ]
   },
   restaurant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Restaurant',
     required: true
   },
+  image: {
+    type: String,
+    required: false, // Changed from required to allow seeding without images initially
+    default: '/api/placeholder/food-item' // Placeholder for items without images
+  },
+  available: {
+    type: Boolean,
+    default: true
+  },
+  preparationTime: {
+    type: Number,
+    default: 15,
+    min: 5,
+    max: 60
+  },
+  spiceLevel: {
+    type: String,
+    enum: ['mild', 'medium', 'hot', 'very_hot'],
+    default: 'medium'
+  },
   isVegetarian: {
     type: Boolean,
     default: false
   },
-  isVegan: {
+  isHalal: {
     type: Boolean,
-    default: false
+    default: true // Most Pakistani food is halal
   },
-  isGlutenFree: {
-    type: Boolean,
-    default: false
+  nutritionalInfo: {
+    calories: Number,
+    protein: Number,
+    carbs: Number,
+    fat: Number
   },
-  spiceLevel: {
-    type: String,
-    enum: ['Mild', 'Medium', 'Spicy', 'Very Spicy'],
-    default: 'Medium'
-  },
-  ingredients: [String],
-  allergens: [String],
-  preparationTime: {
+  tags: [{
+    type: String
+  }],
+  // Neural recommendation features
+  popularityScore: {
     type: Number,
-    required: true,
-    min: 1
+    default: 0,
+    min: 0,
+    max: 1
   },
-  isAvailable: {
-    type: Boolean,
-    default: true
+  orderCount: {
+    type: Number,
+    default: 0
   },
-  popularity: {
+  averageRating: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
+  ratingCount: {
     type: Number,
     default: 0
   }
 }, {
   timestamps: true
 });
+
+// Index for better query performance in recommendations
+menuItemSchema.index({ restaurant: 1, category: 1 });
+menuItemSchema.index({ popularityScore: -1 });
+menuItemSchema.index({ averageRating: -1 });
 
 module.exports = mongoose.model('MenuItem', menuItemSchema);

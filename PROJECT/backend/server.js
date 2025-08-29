@@ -12,7 +12,6 @@ const AdvancedRecommendationEngine = require('./services/advancedRecommendation'
 
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
-const { DynamicPricingEngine } = require('./services/dynamicPricing');
 const EnhancedChatbotService = require('./services/enhancedChatbot');
 
 // ✅ FIXED: Import auth routes properly
@@ -22,7 +21,7 @@ const orderRoutes = require('./routes/orders');
 // ✅ FIXED: Create middleware folder and file first, or comment out for now
 // const { authenticateUser } = require('./middleware/auth'); // Comment this out for now
 
-const pricingEngine = new DynamicPricingEngine();
+
 const enhancedChatbot = new EnhancedChatbotService();
 const advancedRecommendation = new AdvancedRecommendationEngine();
 const app = express();
@@ -461,7 +460,39 @@ async function updateUserPreferencesAfterOrder(user, restaurant, order, orderIte
         console.error('❌ Error updating user preferences:', error);
     }
 }
-
+app.get('/api/menu/:restaurantId', async (req, res) => {
+    try {
+        const restaurantId = req.params.restaurantId;
+        
+        // Check if restaurant exists
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+        
+        // Find menu items - using correct field names from seeding script
+        const menuItems = await MenuItem.find({ 
+            restaurant: restaurantId,
+            available: true  // Changed from isAvailable to available
+        }).sort({ category: 1, name: 1 });
+        
+        res.json({
+            success: true,
+            restaurant_id: restaurantId,
+            restaurant_name: restaurant.name,
+            items: menuItems
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching menu',
+            error: error.message
+        });
+    }
+});
 // Root route - health check
 app.get('/', async (req, res) => {
     try {
@@ -844,6 +875,43 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
+app.get('/api/quick-seed', async (req, res) => {
+  try {
+    await Restaurant.deleteMany({});
+    
+    const restaurants = [
+      {
+        name: 'Student Biryani',
+        cuisine: ['Pakistani'],
+        rating: 4.3,
+        deliveryTime: '30-40 min',
+        deliveryFee: 60,
+        minimumOrder: 350,
+        priceRange: 'Budget',
+        isActive: true,
+        featured: true
+      },
+      {
+        name: 'KFC Pakistan',
+        cuisine: ['Fast Food'],
+        rating: 4.1,
+        deliveryTime: '25-35 min',
+        deliveryFee: 70,
+        minimumOrder: 400,
+        priceRange: 'Moderate',
+        isActive: true,
+        featured: true
+      }
+    ];
+    
+    await Restaurant.insertMany(restaurants);
+    res.json({ success: true, message: 'Quick seed done' });
+    
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // =============== SEARCH ROUTE ===============
 app.get('/api/search', async (req, res) => {
     try {
@@ -1012,144 +1080,7 @@ app.get('/api/analytics/dashboard', async (req, res) => {
     }
 });
 
-// =============== DYNAMIC PRICING ROUTES ===============
-console.log('🚀 Setting up Dynamic Pricing routes...');
 
-// Get dynamic price for a delivery
-app.post('/api/pricing/calculate-price', async (req, res) => {
-    try {
-        console.log('📊 Price calculation request received:', req.body);
-        
-        const { restaurantId, baseDeliveryFee, location } = req.body;
-        
-        if (!restaurantId || !baseDeliveryFee || !location) {
-            return res.status(400).json({
-                success: false,
-                error: 'Missing required fields: restaurantId, baseDeliveryFee, location'
-            });
-        }
-
-        const pricingResult = await pricingEngine.calculateDynamicPrice(
-            restaurantId,
-            baseDeliveryFee,
-            location
-        );
-
-        console.log('✅ Price calculation completed:', pricingResult);
-
-        res.json({
-            success: true,
-            pricing: pricingResult,
-            timestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        console.error('❌ Pricing API error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Internal server error',
-            fallbackPrice: req.body.baseDeliveryFee
-        });
-    }
-});
-
-// Get current surge status for area
-app.post('/api/pricing/surge-status', async (req, res) => {
-    try {
-        console.log('🔥 Surge status request:', req.body);
-        
-        const { location, radius = 5000 } = req.body;
-        
-        // Calculate current surge factors
-        const now = new Date();
-        const hour = now.getHours();
-        const isPeakTime = [11, 12, 13, 18, 19, 20, 21].includes(hour);
-        const isWeekend = [0, 6].includes(now.getDay());
-        
-        let averageMultiplier = 1.0;
-        if (isPeakTime) averageMultiplier += 0.3;
-        if (isWeekend) averageMultiplier += 0.1;
-        
-        // Add some randomness for demand
-        if (Math.random() > 0.7) averageMultiplier += 0.2;
-        
-        const surgeData = {
-            active: averageMultiplier > 1.1,
-            multiplier: Math.round(averageMultiplier * 100) / 100,
-            level: averageMultiplier > 1.5 ? 'high' : averageMultiplier > 1.2 ? 'medium' : 'low',
-            factors: {
-                time: isPeakTime,
-                weather: Math.random() > 0.8, // Random weather impact
-                demand: Math.random() > 0.7
-            }
-        };
-        
-        console.log('✅ Surge status calculated:', surgeData);
-        
-        res.json({
-            success: true,
-            surgeStatus: surgeData
-        });
-    } catch (error) {
-        console.error('❌ Surge status error:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to get surge status' 
-        });
-    }
-});
-
-// Get pricing analytics (mock data for now)
-app.get('/api/pricing/analytics/:restaurantId', async (req, res) => {
-    try {
-        const { restaurantId } = req.params;
-        const { timeRange } = req.query;
-        
-        console.log('📈 Analytics request for restaurant:', restaurantId);
-        
-        // Mock analytics data
-        const analytics = {
-            averageMultiplier: 1.15,
-            maxMultiplier: 2.1,
-            minMultiplier: 0.85,
-            totalSurgeHours: 18,
-            revenueIncrease: '12.5%',
-            customerSatisfaction: 4.2,
-            hourlyBreakdown: Array.from({length: 24}, (_, hour) => ({
-                hour,
-                averageMultiplier: Math.random() * 0.8 + 0.8,
-                orderCount: Math.floor(Math.random() * 50) + 10
-            }))
-        };
-        
-        res.json({
-            success: true,
-            analytics,
-            restaurantId
-        });
-    } catch (error) {
-        console.error('❌ Analytics API error:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to fetch analytics' 
-        });
-    }
-});
-
-// =============== ERROR HANDLING ===============
-app.use((err, req, res, next) => {
-    console.error('Error:', err.stack);
-    res.status(500).json({
-        success: false,
-        message: 'Something went wrong!',
-        error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error'
-    });
-});
-
-console.log('💰 Dynamic Pricing System initialized');
-console.log('🎯 New pricing endpoints available:');
-console.log('   POST /api/pricing/calculate-price');
-console.log('   GET  /api/pricing/analytics/:restaurantId');
-console.log('   POST /api/pricing/surge-status');
 
 // Start the server
 app.listen(PORT, () => {
