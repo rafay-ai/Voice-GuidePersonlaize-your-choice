@@ -13,7 +13,7 @@ const AdvancedRecommendationEngine = require('./services/advancedRecommendation'
 // Import services
 const { getChatbotResponse } = require('./services/chatbot');
 const EnhancedChatbotService = require('./services/enhancedChatbot');
-
+const VoiceProcessor = require('./services/voiceProcessor');
 // ✅ FIXED: Import auth routes properly
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
@@ -24,6 +24,7 @@ const orderRoutes = require('./routes/orders');
 
 const enhancedChatbot = new EnhancedChatbotService();
 const advancedRecommendation = new AdvancedRecommendationEngine();
+const voiceProcessor = new VoiceProcessor();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -832,9 +833,9 @@ app.get('/api/orders/:userId', async (req, res) => {
 
 // =============== CHAT ROUTE ===============
 app.post('/api/chat', async (req, res) => {
-    const { message, userId, sessionData } = req.body;
+    const { message, userId, sessionData, isVoiceInput = false } = req.body;
     
-    console.log('💬 Enhanced chat request:', { message, userId });
+    console.log('💬 Chat request:', { message, userId, isVoiceInput });
     
     if (!message) {
         return res.status(400).json({
@@ -844,10 +845,34 @@ app.post('/api/chat', async (req, res) => {
     }
     
     try {
-        // Use the enhanced chatbot service
-        const chatbotResponse = await enhancedChatbot.getChatbotResponse(message, userId, sessionData);
+        let chatbotResponse;
         
-        console.log('🤖 Enhanced chatbot response:', chatbotResponse.type);
+        // If it's a voice input, use voice processor first
+        if (isVoiceInput) {
+            console.log('🎤 Processing as voice input...');
+            
+            const voiceResult = await voiceProcessor.processVoiceCommand(message, userId, sessionData);
+            
+            // Convert voice result to chat response format
+            chatbotResponse = {
+                message: voiceResult.response,
+                type: voiceResult.type || 'voice_processed',
+                restaurants: voiceResult.restaurants || [],
+                menuItems: voiceResult.menuItems || [],
+                actions: voiceResult.actions || [],
+                voiceData: {
+                    intent: voiceResult.intent,
+                    entities: voiceResult.entities,
+                    confidence: voiceResult.confidence
+                }
+            };
+            
+        } else {
+            // Use regular enhanced chatbot service
+            chatbotResponse = await enhancedChatbot.getChatbotResponse(message, userId, sessionData);
+        }
+        
+        console.log('🤖 Chat response type:', chatbotResponse.type);
         
         res.json({
             success: true,
@@ -855,13 +880,14 @@ app.post('/api/chat', async (req, res) => {
             bot_response: chatbotResponse.message,
             response_type: chatbotResponse.type,
             data: chatbotResponse,
+            isVoiceProcessed: isVoiceInput,
             timestamp: new Date().toISOString()
         });
         
     } catch (error) {
-        console.error('Enhanced chat error:', error);
+        console.error('💥 Chat processing error:', error);
         
-        // Fallback to basic response
+        // Fallback response
         res.json({
             success: true,
             user_message: message,
@@ -870,7 +896,8 @@ app.post('/api/chat', async (req, res) => {
             data: {
                 type: 'general',
                 suggestions: ['Order food', 'Show restaurants', 'My orders', 'Help']
-            }
+            },
+            error: error.message
         });
     }
 });
@@ -1081,6 +1108,481 @@ app.get('/api/analytics/dashboard', async (req, res) => {
 });
 
 
+<<<<<<< HEAD
+=======
+// Get dynamic price for a delivery
+app.post('/api/pricing/calculate-price', async (req, res) => {
+    try {
+        console.log('📊 Price calculation request received:', req.body);
+        
+        const { restaurantId, baseDeliveryFee, location } = req.body;
+        
+        if (!restaurantId || !baseDeliveryFee || !location) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: restaurantId, baseDeliveryFee, location'
+            });
+        }
+
+        const pricingResult = await pricingEngine.calculateDynamicPrice(
+            restaurantId,
+            baseDeliveryFee,
+            location
+        );
+
+        console.log('✅ Price calculation completed:', pricingResult);
+
+        res.json({
+            success: true,
+            pricing: pricingResult,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Pricing API error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            fallbackPrice: req.body.baseDeliveryFee
+        });
+    }
+});
+
+// Get current surge status for area
+app.post('/api/pricing/surge-status', async (req, res) => {
+    try {
+        console.log('🔥 Surge status request:', req.body);
+        
+        const { location, radius = 5000 } = req.body;
+        
+        // Calculate current surge factors
+        const now = new Date();
+        const hour = now.getHours();
+        const isPeakTime = [11, 12, 13, 18, 19, 20, 21].includes(hour);
+        const isWeekend = [0, 6].includes(now.getDay());
+        
+        let averageMultiplier = 1.0;
+        if (isPeakTime) averageMultiplier += 0.3;
+        if (isWeekend) averageMultiplier += 0.1;
+        
+        // Add some randomness for demand
+        if (Math.random() > 0.7) averageMultiplier += 0.2;
+        
+        const surgeData = {
+            active: averageMultiplier > 1.1,
+            multiplier: Math.round(averageMultiplier * 100) / 100,
+            level: averageMultiplier > 1.5 ? 'high' : averageMultiplier > 1.2 ? 'medium' : 'low',
+            factors: {
+                time: isPeakTime,
+                weather: Math.random() > 0.8, // Random weather impact
+                demand: Math.random() > 0.7
+            }
+        };
+        
+        console.log('✅ Surge status calculated:', surgeData);
+        
+        res.json({
+            success: true,
+            surgeStatus: surgeData
+        });
+    } catch (error) {
+        console.error('❌ Surge status error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to get surge status' 
+        });
+    }
+});
+
+// Get pricing analytics (mock data for now)
+app.get('/api/pricing/analytics/:restaurantId', async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { timeRange } = req.query;
+        
+        console.log('📈 Analytics request for restaurant:', restaurantId);
+        
+        // Mock analytics data
+        const analytics = {
+            averageMultiplier: 1.15,
+            maxMultiplier: 2.1,
+            minMultiplier: 0.85,
+            totalSurgeHours: 18,
+            revenueIncrease: '12.5%',
+            customerSatisfaction: 4.2,
+            hourlyBreakdown: Array.from({length: 24}, (_, hour) => ({
+                hour,
+                averageMultiplier: Math.random() * 0.8 + 0.8,
+                orderCount: Math.floor(Math.random() * 50) + 10
+            }))
+        };
+        
+        res.json({
+            success: true,
+            analytics,
+            restaurantId
+        });
+    } catch (error) {
+        console.error('❌ Analytics API error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch analytics' 
+        });
+    }
+});
+// =============== VOICE PROCESSING ROUTES ===============
+console.log('🎤 Setting up Voice Processing routes...');
+
+// Process voice command
+app.post('/api/voice/process', async (req, res) => {
+    try {
+        const { transcript, userId, context = {} } = req.body;
+        
+        console.log('🎤 Voice processing request:', { 
+            transcript: transcript?.substring(0, 50) + '...', 
+            userId,
+            hasContext: !!context 
+        });
+        
+        if (!transcript || typeof transcript !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: 'Transcript is required and must be a string'
+            });
+        }
+        
+        // Process the voice command
+        const result = await voiceProcessor.processVoiceCommand(transcript, userId, context);
+        
+        console.log('✅ Voice processing completed:', {
+            intent: result.intent,
+            entitiesCount: Object.keys(result.entities || {}).length,
+            confidence: result.confidence
+        });
+        
+        res.json({
+            success: true,
+            ...result,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Voice processing error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            fallback: {
+                response: "I'm having trouble processing your voice command. Please try typing instead.",
+                type: 'error_fallback'
+            }
+        });
+    }
+});
+
+// Voice-powered restaurant search
+app.post('/api/voice/search-restaurants', async (req, res) => {
+    try {
+        const { foodQuery, location, userId } = req.body;
+        
+        console.log('🔍 Voice restaurant search:', { foodQuery, location, userId });
+        
+        // Process the food query to extract cuisine/food type
+        const processed = await voiceProcessor.processVoiceCommand(
+            `find restaurants for ${foodQuery}`, 
+            userId
+        );
+        
+        if (processed.entities && processed.entities.foods.length > 0) {
+            const foodItem = processed.entities.foods[0];
+            const restaurants = await voiceProcessor.findRestaurantsForFood(foodItem);
+            
+            res.json({
+                success: true,
+                query: foodQuery,
+                detectedFood: foodItem,
+                restaurants,
+                count: restaurants.length
+            });
+        } else {
+            // Fallback: search all restaurants
+            const restaurants = await Restaurant.find({ isActive: true })
+                .limit(10)
+                .sort({ rating: -1 });
+            
+            res.json({
+                success: true,
+                query: foodQuery,
+                fallback: true,
+                restaurants,
+                count: restaurants.length,
+                message: 'Showing popular restaurants as fallback'
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Voice restaurant search error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Voice-powered menu item search
+app.post('/api/voice/search-menu', async (req, res) => {
+    try {
+        const { restaurantId, foodQuery, userId } = req.body;
+        
+        console.log('🍽️ Voice menu search:', { restaurantId, foodQuery });
+        
+        if (!restaurantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Restaurant ID is required'
+            });
+        }
+        
+        // Process the food query
+        const processed = await voiceProcessor.processVoiceCommand(
+            `find ${foodQuery} on menu`,
+            userId
+        );
+        
+        let menuItems = [];
+        
+        if (processed.entities && processed.entities.foods.length > 0) {
+            const foodItem = processed.entities.foods[0];
+            menuItems = await voiceProcessor.findMenuItems(foodItem, restaurantId);
+        } else {
+            // Fallback: search by text similarity
+            menuItems = await MenuItem.find({
+                restaurant: restaurantId,
+                $or: [
+                    { name: new RegExp(foodQuery, 'i') },
+                    { description: new RegExp(foodQuery, 'i') }
+                ],
+                isAvailable: true
+            }).limit(10);
+        }
+        
+        res.json({
+            success: true,
+            query: foodQuery,
+            restaurantId,
+            menuItems,
+            count: menuItems.length,
+            detectedEntities: processed.entities
+        });
+        
+    } catch (error) {
+        console.error('❌ Voice menu search error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Voice command validation
+app.post('/api/voice/validate', async (req, res) => {
+    try {
+        const { transcript } = req.body;
+        
+        if (!transcript) {
+            return res.status(400).json({
+                success: false,
+                error: 'Transcript is required'
+            });
+        }
+        
+        const processed = await voiceProcessor.processVoiceCommand(transcript);
+        
+        const validation = {
+            isValid: processed.confidence > 0.3,
+            confidence: processed.confidence,
+            intent: processed.intent,
+            entities: processed.entities,
+            suggestions: []
+        };
+        
+        // Add suggestions for low confidence commands
+        if (validation.confidence < 0.5) {
+            validation.suggestions = [
+                'Try speaking more clearly',
+                'Use specific food names like "chicken biryani" or "pizza"',
+                'Say "I want to order [food name]"',
+                'Try "Show me [cuisine type] restaurants"'
+            ];
+        }
+        
+        res.json({
+            success: true,
+            validation,
+            originalTranscript: transcript
+        });
+        
+    } catch (error) {
+        console.error('❌ Voice validation error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get voice command suggestions based on context
+app.post('/api/voice/suggestions', async (req, res) => {
+    try {
+        const { context = {}, userId } = req.body;
+        
+        console.log('💡 Voice suggestions request for user:', userId);
+        
+        const suggestions = [];
+        
+        // Context-aware suggestions
+        if (context.selectedRestaurant) {
+            suggestions.push(
+                `Order from ${context.selectedRestaurant.name}`,
+                'Show me the menu',
+                'Add biryani to cart',
+                'What\'s popular here?'
+            );
+        } else {
+            suggestions.push(
+                'I want to order pizza',
+                'Show me Chinese restaurants',
+                'Find biryani near me',
+                'What do you recommend?'
+            );
+        }
+        
+        if (context.cartItems && context.cartItems.length > 0) {
+            suggestions.push(
+                'Show my cart',
+                'Place my order',
+                'Add more items'
+            );
+        }
+        
+        // User-specific suggestions
+        if (userId) {
+            try {
+                const user = await User.findById(userId);
+                if (user && user.preferences) {
+                    if (user.preferences.favoriteRestaurants && user.preferences.favoriteRestaurants.length > 0) {
+                        suggestions.push('Order from my favorite restaurant');
+                    }
+                    if (user.preferences.preferredCuisines && user.preferences.preferredCuisines.length > 0) {
+                        const cuisine = user.preferences.preferredCuisines[0];
+                        suggestions.push(`Show me ${cuisine} restaurants`);
+                    }
+                }
+            } catch (error) {
+                console.log('⚠️ Could not fetch user preferences:', error.message);
+            }
+        }
+        
+        // General suggestions
+        suggestions.push(
+            'Show my order history',
+            'What\'s trending today?',
+            'My recommendations'
+        );
+        
+        res.json({
+            success: true,
+            suggestions: suggestions.slice(0, 8), // Limit to 8 suggestions
+            context: {
+                hasRestaurant: !!context.selectedRestaurant,
+                hasCartItems: !!(context.cartItems && context.cartItems.length > 0),
+                isLoggedIn: !!userId
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Voice suggestions error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            fallbackSuggestions: [
+                'I want to order food',
+                'Show me restaurants',
+                'What\'s popular?'
+            ]
+        });
+    }
+});
+
+// Voice analytics endpoint (for admin dashboard)
+app.get('/api/voice/analytics', async (req, res) => {
+    try {
+        // Mock analytics data for now
+        // In production, you'd track voice usage in MongoDB
+        const analytics = {
+            totalVoiceCommands: Math.floor(Math.random() * 1000) + 500,
+            successfulCommands: Math.floor(Math.random() * 800) + 400,
+            averageConfidence: 0.78,
+            popularIntents: [
+                { intent: 'order_food', count: 245, percentage: 35 },
+                { intent: 'search_restaurants', count: 189, percentage: 27 },
+                { intent: 'add_to_cart', count: 134, percentage: 19 },
+                { intent: 'show_recommendations', count: 98, percentage: 14 },
+                { intent: 'other', count: 34, percentage: 5 }
+            ],
+            languageDistribution: [
+                { language: 'English', percentage: 85 },
+                { language: 'Urdu', percentage: 15 }
+            ],
+            hourlyUsage: Array.from({ length: 24 }, (_, hour) => ({
+                hour,
+                commands: Math.floor(Math.random() * 50) + 10
+            })),
+            deviceTypes: [
+                { type: 'Mobile', percentage: 68 },
+                { type: 'Desktop', percentage: 28 },
+                { type: 'Tablet', percentage: 4 }
+            ]
+        };
+        
+        res.json({
+            success: true,
+            analytics,
+            generatedAt: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Voice analytics error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+console.log('✅ Voice Processing routes setup complete!');
+console.log('🎤 Available voice endpoints:');
+console.log('   POST /api/voice/process - Process voice commands');
+console.log('   POST /api/voice/search-restaurants - Voice restaurant search');
+console.log('   POST /api/voice/search-menu - Voice menu search');
+console.log('   POST /api/voice/validate - Validate voice commands');
+console.log('   POST /api/voice/suggestions - Get voice command suggestions');
+console.log('   GET  /api/voice/analytics - Voice usage analytics');
+
+// =============== ERROR HANDLING ===============
+app.use((err, req, res, next) => {
+    console.error('Error:', err.stack);
+    res.status(500).json({
+        success: false,
+        message: 'Something went wrong!',
+        error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error'
+    });
+});
+
+console.log('💰 Dynamic Pricing System initialized');
+console.log('🎯 New pricing endpoints available:');
+console.log('   POST /api/pricing/calculate-price');
+console.log('   GET  /api/pricing/analytics/:restaurantId');
+console.log('   POST /api/pricing/surge-status');
+>>>>>>> bb8633207f371f8d94cc459334c28b317dee01f0
 
 // Start the server
 app.listen(PORT, () => {
