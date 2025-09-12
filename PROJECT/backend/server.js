@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/database');
+const recommendationRoutes = require('./routes/recommendations');
+const matrixFactorizationCF = require('./services/matrixFactorizationCF');
 //const neuralRecommendationsRoutes = require('./routes/neuralRecommendations');
 
 // Import models
@@ -33,11 +35,21 @@ const PORT = process.env.PORT || 5000;
 // Connect to MongoDB
 connectDB();
 
+
+// Initialize Matrix Factorization with existing order data
+setTimeout(async () => {
+  try {
+    await matrixFactorizationCF.initializeFromDatabase();
+    console.log('Matrix Factorization initialized with user data');
+  } catch (error) {
+    console.error('Failed to initialize Matrix Factorization:', error);
+  }
+}, 5000); 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.use('/api/recommendations', recommendationRoutes);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);

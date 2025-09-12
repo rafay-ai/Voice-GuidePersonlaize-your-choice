@@ -9,7 +9,7 @@ const User = require('./models/User');
 
 const connectDB = async () => {
     try {
-        await mongoose.connect('mongodb://localhost:27017/food_delivery_app');
+        await mongoose.connect('mongodb://localhost:27017/food-delivery');
         console.log('✅ Connected to MongoDB');
     } catch (error) {
         console.error('❌ Connection error:', error);
