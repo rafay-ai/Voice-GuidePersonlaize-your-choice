@@ -357,89 +357,119 @@ function App() {
   const [currentFeedback, setCurrentFeedback] = useState('');
 
   // ===== ENHANCED RECOMMENDATIONS FETCH FUNCTION =====
-  const fetchEnhancedRecommendations = async (userId) => {
+  // Add this improved version to your App.js
+const fetchEnhancedRecommendations = async (userId) => {
     console.log('Fetching enhanced recommendations for:', userId);
     setLoadingEnhancedRecs(true);
     
     try {
         let requestUserId = userId;
         
-        if (!userId || userId === 'guest') {
-            console.warn('No valid user ID provided, using guest recommendations');
-            requestUserId = '6870bd22f7b37e4543eebd97';
-        } else if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
-            console.warn('Invalid ObjectId format, using fallback');
-            requestUserId = '6870bd22f7b37e4543eebd97';
-        }
-        
-        // TRY NEURAL RECOMMENDATIONS FIRST
-        try {
-            const neuralUrl = `http://localhost:5000/api/neural/recommendations/${requestUserId}?limit=6&includeExplanation=true`;
-            console.log('Trying neural recommendations:', neuralUrl);
+        // If no valid user ID, use a simple approach that doesn't require specific users
+        if (!userId || userId === 'guest' || !userId.match(/^[0-9a-fA-F]{24}$/)) {
+            console.warn('Invalid user ID, fetching popular recommendations instead');
             
-            const neuralResponse = await fetch(neuralUrl);
-            
-            if (neuralResponse.ok) {
-                const neuralData = await neuralResponse.json();
-                console.log('Neural recommendations response:', neuralData);
+            // Fetch popular recommendations instead of user-specific ones
+            try {
+                const response = await fetch('http://localhost:5000/api/restaurants');
+                const data = await response.json();
                 
-                if (neuralData.success && neuralData.recommendations && neuralData.recommendations.length > 0) {
-                    console.log('Using Neural Collaborative Filtering recommendations!');
-                    setEnhancedRecommendations(neuralData.recommendations);
+                if (data.success && data.data && data.data.length > 0) {
+                    // Convert restaurants to recommendation format
+                    const popularRecs = data.data.slice(0, 6).map((restaurant, index) => ({
+                        id: restaurant._id,
+                        name: restaurant.name,
+                        cuisine: restaurant.cuisine,
+                        rating: restaurant.rating,
+                        deliveryTime: restaurant.deliveryTime,
+                        priceRange: restaurant.priceRange,
+                        deliveryFee: restaurant.deliveryFee || 50,
+                        minimumOrder: restaurant.minimumOrder || 200,
+                        matchPercentage: Math.round((restaurant.rating || 3.5) * 20),
+                        explanations: ['Popular choice', 'Highly rated'],
+                        rank: index + 1
+                    }));
+                    
+                    setEnhancedRecommendations(popularRecs);
                     setShowEnhancedRecs(true);
                     return;
                 }
+            } catch (fallbackError) {
+                console.error('Fallback failed:', fallbackError);
             }
-        } catch (neuralError) {
-            console.log('Neural recommendations not available, falling back to advanced system:', neuralError.message);
+            
+            setEnhancedRecommendations([]);
+            setShowEnhancedRecs(false);
+            return;
         }
         
-        // FALLBACK TO EXISTING ADVANCED SYSTEM
-        const url = `http://localhost:5000/api/recommendations/advanced/${requestUserId}?count=6&includeNew=true`;
-        console.log('Falling back to advanced recommendations:', url);
+        // Try to fetch recommendations for valid user ID
+        const url = `http://localhost:5000/api/recommendations/${requestUserId}?count=6`;
+        console.log('Fetching recommendations from:', url);
         
         const response = await fetch(url);
+        console.log('Response status:', response.status);
         
         if (!response.ok) {
             const errorText = await response.text();
             console.error('HTTP Error:', response.status, errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
+            
+            // If user not found, fall back to popular restaurants
+            if (response.status === 404) {
+                console.log('User not found, falling back to popular restaurants');
+                const restaurantsResponse = await fetch('http://localhost:5000/api/restaurants');
+                const restaurantsData = await restaurantsResponse.json();
+                
+                if (restaurantsData.success && restaurantsData.data) {
+                    const fallbackRecs = restaurantsData.data.slice(0, 6).map((restaurant, index) => ({
+                        id: restaurant._id,
+                        name: restaurant.name,
+                        cuisine: restaurant.cuisine,
+                        rating: restaurant.rating,
+                        deliveryTime: restaurant.deliveryTime,
+                        priceRange: restaurant.priceRange,
+                        deliveryFee: restaurant.deliveryFee || 50,
+                        minimumOrder: restaurant.minimumOrder || 200,
+                        matchPercentage: Math.round((restaurant.rating || 3.5) * 20),
+                        explanations: ['Popular choice'],
+                        rank: index + 1
+                    }));
+                    
+                    setEnhancedRecommendations(fallbackRecs);
+                    setShowEnhancedRecs(true);
+                    return;
+                }
+            }
+            
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
-        console.log('Advanced recommendations response:', data);
+        console.log('Recommendations response:', data);
         
         if (data.success && data.recommendations && data.recommendations.length > 0) {
-            const validRecommendations = data.recommendations.filter((rec, index) => {
-                const isValid = rec && 
-                               typeof rec === 'object' && 
-                               rec.name && 
-                               typeof rec.name === 'string' &&
-                               rec.name.trim().length > 0;
-                
-                if (!isValid) {
-                    console.warn(`Invalid recommendation at index ${index}:`, rec);
-                }
-                return isValid;
-            });
-            
-            console.log(`Valid advanced recommendations: ${validRecommendations.length}`);
-            setEnhancedRecommendations(validRecommendations);
+            console.log(`Found ${data.recommendations.length} recommendations`);
+            setEnhancedRecommendations(data.recommendations);
             setShowEnhancedRecs(true);
         } else {
-            console.log('No advanced recommendations available');
+            console.log('No recommendations available');
             setEnhancedRecommendations([]);
             setShowEnhancedRecs(true);
         }
+        
     } catch (error) {
-        console.error('All recommendation systems failed:', error);
+        console.error('Failed to fetch recommendations:', error);
         setEnhancedRecommendations([]);
-        setShowEnhancedRecs(true);
+        setShowEnhancedRecs(false);
+        
+        // Show user-friendly error only for real errors, not fallbacks
+        if (!error.message.includes('User not found')) {
+            alert(`Recommendation system temporarily unavailable: ${error.message}`);
+        }
     } finally {
         setLoadingEnhancedRecs(false);
     }
-};
-// ===== ANALYTICS FUNCTION =====
+};// ===== ANALYTICS FUNCTION =====
   const fetchAnalytics = useCallback(() => {
     setTimeout(() => {
       const restaurantOrders = {};

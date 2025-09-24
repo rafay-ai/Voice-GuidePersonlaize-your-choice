@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Restaurant = require('../models/Restaurant');
+const MenuItem = require('../models/MenuItem'); // Added MenuItem import
 
 // GET all restaurants
 router.get('/', async (req, res) => {
@@ -49,7 +50,9 @@ router.get('/:id', async (req, res) => {
     });
   }
 });
-app.get('/api/menu/:restaurantId', async (req, res) => {
+
+// GET menu items for a specific restaurant - FIXED ROUTE
+router.get('/menu/:restaurantId', async (req, res) => {
     try {
         const restaurantId = req.params.restaurantId;
         
@@ -81,5 +84,45 @@ app.get('/api/menu/:restaurantId', async (req, res) => {
             error: error.message
         });
     }
-}); 
+});
+
+// GET menu items for a specific restaurant - ADDITIONAL ROUTE
+router.get('/menu/:restaurantId', async (req, res) => {
+    try {
+        const restaurantId = req.params.restaurantId;
+        console.log(`Fetching menu for restaurant: ${restaurantId}`);
+        
+        // Check if restaurant exists
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+        
+        // Find menu items
+        const menuItems = await MenuItem.find({ 
+            restaurant: restaurantId,
+            available: true
+        }).sort({ category: 1, name: 1 });
+        
+        console.log(`Found ${menuItems.length} menu items for ${restaurant.name}`);
+        
+        res.json({
+            success: true,
+            restaurant_id: restaurantId,
+            restaurant_name: restaurant.name,
+            items: menuItems
+        });
+    } catch (error) {
+        console.error('Error fetching menu:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching menu',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
